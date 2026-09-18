@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    name: Build & test (Node)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - run: npm ci
+
+      # Order matters: packages/db and packages/shared must be built (their
+      # dist/ + .d.ts) before hub/apps/api or hub/apps/worker type-check
+      # against them. Root "build" runs each workspace's own build script
+      # in the order declared in package.json's "workspaces" field
+      # (packages/* then hub/apps/*), which already gets this right — see
+      # README.md for why.
+      - run: npm run build
+
+      - run: npm test
+
+  php-lint:
+    name: PHP lint (WordPress plugin)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+
+      # No PHP interpreter was available when this plugin was first written
+      # (see the phase-1 commit message) — this job is the actual syntax
+      # check that was missing locally.
+      - name: Syntax-check every PHP file
+        run: |
+          set -e
+          find wp-plugin -name "*.php" -print0 | xargs -0 -n1 php -l
+
+  compose-validate:
+    name: Validate docker-compose files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate hub/docker-compose.yml
+        run: docker compose -f hub/docker-compose.yml config --quiet
+        env:
+          HUB_DOMAIN: ci-placeholder.example.com
+          POSTGRES_PASSWORD: ci-placeholder
+          SESSION_SECRET: ci-placeholder-session-secret-at-least-32-chars
+          SECRET_ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000aa
+          HUB_PUBLIC_URL: https://ci-placeholder.example.com
+
+      - name: Validate dev/docker-compose.yml
+        run: docker compose -f dev/docker-compose.yml config --quiet
