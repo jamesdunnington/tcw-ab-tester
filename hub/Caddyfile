@@ -1,0 +1,28 @@
+{$HUB_DOMAIN} {
+	# Tracker + WP-facing endpoints, and the admin API — all served by the api container.
+	handle /api/* {
+		reverse_proxy api:4000
+	}
+	handle /wp/* {
+		reverse_proxy api:4000
+	}
+	handle /ingest {
+		reverse_proxy api:4000
+	}
+	handle /runtime-inline.js {
+		reverse_proxy api:4000
+	}
+	handle /tracker.js {
+		reverse_proxy api:4000
+	}
+	handle /healthz {
+		reverse_proxy api:4000
+	}
+
+	# Everything else: the dashboard SPA.
+	handle {
+		reverse_proxy dashboard:80
+	}
+
+	encode gzip
+}

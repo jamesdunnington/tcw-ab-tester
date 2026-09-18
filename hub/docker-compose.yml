@@ -1,0 +1,99 @@
+# Production hub stack: Caddy (TLS + reverse proxy) -> api / dashboard,
+# backed by Postgres and Redis. Build context is the repo root (not this
+# hub/ folder) because the API/worker/dashboard Dockerfiles need
+# packages/shared, packages/db, and packages/tracker as workspace siblings.
+#
+# Usage:
+#   cp hub/.env.example hub/.env   # fill in real secrets
+#   docker compose -f hub/docker-compose.yml --env-file hub/.env up -d --build
+#
+# For local development against a real WordPress instance, layer
+# docker-compose.dev.yml on top (see that file's header comment).
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-tcwab}
+      POSTGRES_USER: ${POSTGRES_USER:-tcwab}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in hub/.env}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-tcwab}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"] # persist the ingest stream across restarts
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ..
+      dockerfile: hub/apps/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgres://${POSTGRES_USER:-tcwab}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-tcwab}
+      REDIS_URL: redis://redis:6379
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in hub/.env}
+      SECRET_ENCRYPTION_KEY: ${SECRET_ENCRYPTION_KEY:?set SECRET_ENCRYPTION_KEY in hub/.env}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+      HUB_PUBLIC_URL: ${HUB_PUBLIC_URL:?set HUB_PUBLIC_URL in hub/.env}
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  worker:
+    build:
+      context: ..
+      dockerfile: hub/apps/worker/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://${POSTGRES_USER:-tcwab}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-tcwab}
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      api: { condition: service_started } # api runs migrations on boot; worker needs the schema to exist
+
+  dashboard:
+    build:
+      context: ..
+      dockerfile: hub/apps/dashboard/Dockerfile
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      HUB_DOMAIN: ${HUB_DOMAIN:?set HUB_DOMAIN in hub/.env, e.g. ab.yourdomain.com}
+    depends_on:
+      - api
+      - dashboard
+
+volumes:
+  pg_data:
+  redis_data:
+  caddy_data:
+  caddy_config:

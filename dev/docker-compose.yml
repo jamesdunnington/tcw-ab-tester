@@ -1,0 +1,114 @@
+# Local end-to-end dev harness: hub (plain HTTP, no Caddy/TLS) + a real
+# WordPress + MySQL with the plugin live-mounted, all on one Docker
+# network so WordPress can reach the hub at http://api:4000.
+#
+# Usage:
+#   docker compose -f dev/docker-compose.yml up --build
+#   Hub dashboard:  http://localhost:5174
+#   Hub API:        http://localhost:4000
+#   WordPress:      http://localhost:8080  (finish the 5-minute install, then
+#                    activate "TCW A/B Tester" under Plugins)
+#
+# In wp-admin > Settings > TCW A/B Tester, set:
+#   Hub URL: http://api:4000        (container-to-container, not localhost)
+# after creating the site from the dashboard at http://localhost:5174/sites.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: tcwab
+      POSTGRES_USER: tcwab
+      POSTGRES_PASSWORD: dev-only-password
+    ports:
+      - "5433:5432" # host access for psql/inspection; not needed by any service here
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tcwab"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ..
+      dockerfile: hub/apps/api/Dockerfile
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      DATABASE_URL: postgres://tcwab:dev-only-password@postgres:5432/tcwab
+      REDIS_URL: redis://redis:6379
+      SESSION_SECRET: dev-session-secret-change-me-please-32chars
+      SECRET_ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000aa
+      ALLOWED_ORIGINS: http://localhost:5174
+      HUB_PUBLIC_URL: http://localhost:4000
+    ports:
+      - "4000:4000"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  worker:
+    build:
+      context: ..
+      dockerfile: hub/apps/worker/Dockerfile
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgres://tcwab:dev-only-password@postgres:5432/tcwab
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      api: { condition: service_started }
+
+  dashboard:
+    build:
+      context: ..
+      dockerfile: hub/apps/dashboard/Dockerfile
+      args:
+        VITE_API_URL: http://localhost:4000
+    ports:
+      - "5174:80"
+    depends_on:
+      - api
+
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: wordpress
+      MYSQL_PASSWORD: dev-only-password
+      MYSQL_ROOT_PASSWORD: dev-only-root-password
+    volumes:
+      - wp_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pdev-only-root-password"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  wordpress:
+    image: wordpress:php8.2-apache
+    environment:
+      WORDPRESS_DB_HOST: mysql
+      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: dev-only-password
+    ports:
+      - "8080:80"
+    volumes:
+      - wp_data:/var/www/html
+      - ../wp-plugin/tcw-ab-tester:/var/www/html/wp-content/plugins/tcw-ab-tester
+    depends_on:
+      mysql: { condition: service_healthy }
+
+volumes:
+  wp_mysql_data:
+  wp_data:

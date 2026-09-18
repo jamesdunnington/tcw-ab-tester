@@ -1,0 +1,25 @@
+{
+  "name": "tcw-ab-tester",
+  "private": true,
+  "version": "0.1.0",
+  "description": "TCW A/B Tester — self-hosted engagement A/B testing hub + WordPress plugin",
+  "workspaces": [
+    "packages/*",
+    "hub/apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "dev:api": "npm run dev -w @tcw/api",
+    "dev:worker": "npm run dev -w @tcw/worker",
+    "dev:dashboard": "npm run dev -w @tcw/dashboard",
+    "tracker:build": "npm run build -w @tcw/tracker"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
