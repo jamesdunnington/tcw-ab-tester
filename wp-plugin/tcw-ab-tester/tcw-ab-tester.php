@@ -26,6 +26,7 @@ define('TCWAB_PLUGIN_URL', plugin_dir_url(__FILE__));
 
 require_once TCWAB_PLUGIN_DIR . 'includes/class-hub-client.php';
 require_once TCWAB_PLUGIN_DIR . 'includes/class-rest-api.php';
+require_once TCWAB_PLUGIN_DIR . 'includes/class-editor-bridge.php';
 require_once TCWAB_PLUGIN_DIR . 'includes/class-runtime.php';
 require_once TCWAB_PLUGIN_DIR . 'includes/class-variants.php';
 require_once TCWAB_PLUGIN_DIR . 'includes/class-seo-guard.php';
@@ -47,6 +48,7 @@ final class TCWAB_Plugin {
 	public TCWAB_Hub_Client $hub_client;
 	public TCWAB_REST_API $rest_api;
 	public TCWAB_Runtime $runtime;
+	public TCWAB_Editor_Bridge $editor_bridge;
 	public TCWAB_Variants $variants;
 	public TCWAB_SEO_Guard $seo_guard;
 	public TCWAB_Archive $archive;
@@ -68,10 +70,12 @@ final class TCWAB_Plugin {
 		$finalizer        = new TCWAB_Finalizer(new TCWAB_Promoter($this->variants), new TCWAB_Cleanup($this->variants), $cache, $this->archive);
 		$this->rest_api   = new TCWAB_REST_API($this->hub_client, $this->variants, $finalizer, $cache);
 		$this->runtime    = new TCWAB_Runtime($this->hub_client);
+		$this->editor_bridge = new TCWAB_Editor_Bridge($this->hub_client);
 		$this->admin      = new TCWAB_Admin($this->hub_client, $this->archive);
 
 		add_action('init', [$this->rest_api, 'register_routes']);
 		add_action('wp_head', [$this->runtime, 'print_head_snippet'], 1);
+		add_action('template_redirect', [$this->editor_bridge, 'gate'], 1);
 		add_action('wp', [$this->seo_guard, 'maybe_noindex_variant']);
 		add_filter('pre_get_posts', [$this->seo_guard, 'exclude_variants_from_queries']);
 		add_filter('display_post_states', [$this->variants, 'add_post_state'], 10, 2);

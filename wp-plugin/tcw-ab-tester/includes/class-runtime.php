@@ -27,7 +27,8 @@ class TCWAB_Runtime {
 	}
 
 	public function print_head_snippet(): void {
-		if (!is_singular() || !$this->hub_client->is_configured()) {
+		// The visual editor must see the original page, never a variant.
+		if (TCWAB_Editor_Bridge::is_editor_request() || !is_singular() || !$this->hub_client->is_configured()) {
 			return;
 		}
 

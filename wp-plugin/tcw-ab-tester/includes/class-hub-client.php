@@ -74,6 +74,31 @@ class TCWAB_Hub_Client {
 	}
 
 	/**
+	 * Verifies a visual-editor token minted by the hub. PHP mirror of
+	 * packages/shared/src/editor-token.ts (verifyEditorToken): keep in sync.
+	 *
+	 * @return array{sk:string,t:string,v:string,exp:int,n:string}|null Payload when valid, null otherwise.
+	 */
+	public function verify_editor_token(string $token): ?array {
+		if (!$this->is_configured() || !preg_match('/^([A-Za-z0-9_-]+)\.([0-9a-f]{64})$/', $token, $m)) {
+			return null;
+		}
+		$expected = hash_hmac('sha256', "tcwab-editor\n" . $m[1], $this->get_site_secret());
+		if (!hash_equals($expected, $m[2])) {
+			return null;
+		}
+		$json    = base64_decode(strtr($m[1], '-_', '+/'), true);
+		$payload = is_string($json) ? json_decode($json, true) : null;
+		if (!is_array($payload) || !isset($payload['sk'], $payload['t'], $payload['v'], $payload['exp'])) {
+			return null;
+		}
+		if ($payload['sk'] !== $this->get_site_key() || time() > (int) $payload['exp']) {
+			return null;
+		}
+		return $payload;
+	}
+
+	/**
 	 * Calls the hub. Returns the decoded JSON body on 2xx, or a WP_Error.
 	 * @param array<string, mixed>|null $body
 	 * @return array<string, mixed>|WP_Error
