@@ -30,6 +30,8 @@ export function applyOps(ops: ChangeOp[]): void {
         }
       } else if (o.op === "attr") {
         if (el.getAttribute(o.name) !== o.value) el.setAttribute(o.name, o.value);
+      } else if (o.op === "goal") {
+        if (el.getAttribute("data-tcwab-goal") !== o.name) el.setAttribute("data-tcwab-goal", o.name);
       } else if (el.style.display !== "none") {
         el.style.setProperty("display", "none", "important");
       }

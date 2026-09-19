@@ -1,4 +1,4 @@
-import { signRequest } from "@tcw/shared";
+import { signRequest, type ChangeOp } from "@tcw/shared";
 import { decryptSecret } from "./crypto.js";
 import type { SiteRow } from "./hmac-guard.js";
 
@@ -68,7 +68,7 @@ export interface RuntimeConfigPushEntry {
   type: "page" | "element";
   status: string;
   wpPostId: number;
-  variants: Array<{ key: string; weight: number; isControl: boolean; redirectUrl?: string }>;
+  variants: Array<{ key: string; weight: number; isControl: boolean; redirectUrl?: string; ops?: ChangeOp[] }>;
 }
 
 /** Pushes the full active-test config for a site so WP can inject the runtime snippet immediately. */

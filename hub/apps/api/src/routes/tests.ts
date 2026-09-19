@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
-import { createPageTestSchema } from "@tcw/shared";
+import { and, eq } from "drizzle-orm";
+import { createPageTestSchema, createElementTestSchema, changeOpsSchema } from "@tcw/shared";
 import { db } from "../db/client.js";
 import { sites, tests, variants } from "@tcw/db";
 import { requireAuth } from "../lib/session.js";
@@ -78,6 +78,67 @@ export async function testRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(201).send({ test, variants: [controlVariant] });
   });
 
+  // Element tests: no variant post is duplicated; variant "b" carries change ops instead.
+  app.post("/api/element-tests", async (request, reply) => {
+    const body = createElementTestSchema.parse(request.body);
+    const site = await getSiteOr404(body.siteId, reply);
+    if (!site) return;
+    const postInfo = await fetchPostInfo(site, body.wpPostId);
+
+    const [test] = await db
+      .insert(tests)
+      .values({
+        siteId: site.id,
+        name: body.name ?? postInfo.title,
+        type: "element",
+        status: "draft",
+        wpPostId: postInfo.id,
+        wpPostType: postInfo.type,
+        wpPermalink: postInfo.permalink,
+        wordCount: postInfo.wordCount,
+        trafficSplit: body.trafficSplit,
+        minSampleSize: body.minSampleSize,
+        minRunDays: body.minRunDays,
+        confidenceThreshold: String(body.confidenceThreshold),
+      })
+      .returning();
+
+    const created = await db
+      .insert(variants)
+      .values([
+        { testId: test.id, key: "a", label: "A (original)", isControl: true, trafficWeight: 100 - body.trafficSplit, changeOps: [] },
+        { testId: test.id, key: "b", label: "B (variant)", isControl: false, trafficWeight: body.trafficSplit, changeOps: [] },
+      ])
+      .returning();
+
+    return reply.code(201).send({ test, variants: created });
+  });
+
+  // Replace a variant's change ops (what the visual editor saves).
+  app.put("/api/tests/:id/variants/:key/ops", async (request, reply) => {
+    const { id, key } = z.object({ id: z.string().uuid(), key: z.string().min(1).max(32) }).parse(request.params);
+    const { ops } = z.object({ ops: changeOpsSchema }).parse(request.body);
+
+    const [test] = await db.select().from(tests).where(eq(tests.id, id)).limit(1);
+    if (!test) return reply.code(404).send({ error: "test_not_found" });
+    if (test.type !== "element") return reply.code(409).send({ error: "not_an_element_test" });
+
+    const [variant] = await db
+      .update(variants)
+      .set({ changeOps: ops })
+      .where(and(eq(variants.testId, id), eq(variants.key, key)))
+      .returning();
+    if (!variant) return reply.code(404).send({ error: "variant_not_found" });
+
+    // A live test picks the edit up right away.
+    if (test.status === "running") {
+      const site = await getSiteOr404(test.siteId, reply);
+      if (!site) return;
+      await pushRuntimeConfig(site, await buildRuntimeConfig(site.id));
+    }
+    return reply.send({ variant });
+  });
+
   // Step 2: ask WP to duplicate the original post into a "b" variant.
   app.post("/api/tests/:id/variants", async (request, reply) => {
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
@@ -124,6 +185,10 @@ export async function testRoutes(app: FastifyInstance): Promise<void> {
     const variantRows = await db.select().from(variants).where(eq(variants.testId, id));
     if (variantRows.length < 2) {
       return reply.code(409).send({ error: "needs_at_least_two_variants" });
+    }
+    if (test.type === "element") {
+      const hasEdit = variantRows.some((v) => !v.isControl && changeOpsSchema.catch([]).parse(v.changeOps ?? []).some((o) => o.op !== "goal"));
+      if (!hasEdit) return reply.code(409).send({ error: "variant_has_no_changes" });
     }
 
     const [updated] = await db

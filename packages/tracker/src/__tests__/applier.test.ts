@@ -33,6 +33,11 @@ describe("applyOps", () => {
     expect(el.style.getPropertyPriority("background-color")).toBe("important");
   });
 
+  it("flags goal elements for the tracker", () => {
+    applyOps([{ op: "goal", selector: "#cta", name: "signup" }]);
+    expect(document.getElementById("cta")!.getAttribute("data-tcwab-goal")).toBe("signup");
+  });
+
   it("skips invalid selectors and missing nodes without throwing", () => {
     const ops: ChangeOp[] = [
       { op: "text", selector: "###", value: "x" },

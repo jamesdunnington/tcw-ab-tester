@@ -62,3 +62,20 @@ describe("deriveIncrements", () => {
     }
   });
 });
+
+describe("deriveIncrements: element tests (goalOnly)", () => {
+  it("counts a click on a goal element as a conversion", () => {
+    const r = deriveIncrements(baseEvent({ type: "click", data: { goal: "signup", x: 1, y: 2 } }), { goalOnly: true });
+    expect(r.clicked).toBe(true);
+  });
+
+  it("ignores a click that hit no goal element", () => {
+    const r = deriveIncrements(baseEvent({ type: "click", data: { goal: null, x: 1, y: 2 } }), { goalOnly: true });
+    expect(r.clicked).toBe(false);
+  });
+
+  it("page tests still count any click", () => {
+    const r = deriveIncrements(baseEvent({ type: "click", data: { goal: null } }));
+    expect(r.clicked).toBe(true);
+  });
+});

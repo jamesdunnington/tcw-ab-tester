@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { changeOpSchema, changeOpsSchema } from "../change-ops.js";
+import { changeOpSchema, changeOpsSchema, mergeGoalOps } from "../change-ops.js";
 
 const ok = (v: unknown) => changeOpSchema.safeParse(v).success;
 
@@ -34,5 +34,27 @@ describe("changeOpSchema", () => {
     expect(ok({ op: "js", selector: "#a", value: "x" })).toBe(false);
     const many = Array.from({ length: 201 }, () => ({ op: "hide", selector: "#a" }));
     expect(changeOpsSchema.safeParse(many).success).toBe(false);
+  });
+});
+
+describe("mergeGoalOps", () => {
+  const goal = { op: "goal", selector: "#cta", name: "signup" } as const;
+  const hide = { op: "hide", selector: ".banner" } as const;
+
+  it("gives the control variant the goals declared on a challenger", () => {
+    const [control, b] = mergeGoalOps([[], [hide, goal]]);
+    expect(control).toEqual([goal]);
+    expect(b).toEqual([hide, goal]);
+  });
+
+  it("de-duplicates identical goals declared on several variants", () => {
+    const out = mergeGoalOps([[goal], [goal, hide]]);
+    expect(out[0]).toEqual([goal]);
+    expect(out[1]).toEqual([hide, goal]);
+  });
+
+  it("rejects malformed goal names", () => {
+    expect(ok({ op: "goal", selector: "#a", name: "has space" })).toBe(false);
+    expect(ok({ op: "goal", selector: "#a", name: "signup" })).toBe(true);
   });
 });

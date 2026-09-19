@@ -51,9 +51,38 @@ export const changeOpSchema = z.discriminatedUnion("op", [
   }),
   z.object({ op: z.literal("attr"), ...base, name: attrName, value: attrValue }),
   z.object({ op: z.literal("hide"), ...base }),
+  /** Marks the element as a conversion goal: sets data-tcwab-goal so the tracker reports its clicks/hovers. */
+  z.object({ op: z.literal("goal"), ...base, name: z.string().regex(/^[a-z0-9_-]{1,40}$/i) }),
 ]);
 
 export const changeOpsSchema = z.array(changeOpSchema).max(200);
 
 export type ChangeOp = z.infer<typeof changeOpSchema>;
 export type ChangeOps = z.infer<typeof changeOpsSchema>;
+
+/**
+ * Goals describe what counts as a conversion, so they must exist on every
+ * variant, including the control (which has no edits of its own). Returns one
+ * ops list per input list: its own non-goal ops plus the de-duplicated union
+ * of goal ops from all variants.
+ */
+export function mergeGoalOps(opsByVariant: ChangeOp[][]): ChangeOp[][] {
+  const goals = new Map<string, ChangeOp>();
+  for (const ops of opsByVariant) {
+    for (const o of ops) if (o.op === "goal") goals.set(`${o.selector}\u0000${o.name}`, o);
+  }
+  const shared = [...goals.values()];
+  return opsByVariant.map((ops) => [...ops.filter((o) => o.op !== "goal"), ...shared]);
+}
+
+/** Body for creating an element test: same targeting as a page test, no variant post is duplicated. */
+export const createElementTestSchema = z.object({
+  siteId: z.string().uuid(),
+  name: z.string().min(1).max(160).optional(),
+  wpPostId: z.number().int().positive(),
+  trafficSplit: z.number().min(1).max(99).default(50),
+  minSampleSize: z.number().int().positive().default(200),
+  minRunDays: z.number().int().min(1).max(60).default(7),
+  confidenceThreshold: z.number().min(0.5).max(0.999).default(0.95),
+});
+export type CreateElementTestInput = z.infer<typeof createElementTestSchema>;

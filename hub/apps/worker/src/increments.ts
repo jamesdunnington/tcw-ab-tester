@@ -9,7 +9,10 @@ const MAX_HEARTBEAT_DELTA_MS = 10_000;
  * __tests__/process-event.test.ts) without needing DATABASE_URL/REDIS_URL
  * set up just to import it.
  */
-export function deriveIncrements(event: QueuedTrackerEventInput): {
+export function deriveIncrements(
+  event: QueuedTrackerEventInput,
+  opts: { goalOnly?: boolean } = {},
+): {
   activeMs: number;
   maxScrollPct: number;
   clicked: boolean;
@@ -29,7 +32,9 @@ export function deriveIncrements(event: QueuedTrackerEventInput): {
   }
 
   if (event.type === "click") {
-    return { activeMs: 0, maxScrollPct: 0, clicked: true, rageClicks: 0 };
+    // Element tests convert only on a goal-flagged element; page tests count any click.
+    const clicked = opts.goalOnly ? typeof data.goal === "string" : true;
+    return { activeMs: 0, maxScrollPct: 0, clicked, rageClicks: 0 };
   }
 
   if (event.type === "rage_click") {

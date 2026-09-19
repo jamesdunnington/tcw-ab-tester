@@ -2,12 +2,13 @@ import { sql } from "drizzle-orm";
 import { events, assignments, pageviews } from "@tcw/db";
 import type { QueuedTrackerEventInput } from "@tcw/shared";
 import { db } from "./db.js";
-import { resolveVariantId } from "./variant-cache.js";
+import { resolveVariant } from "./variant-cache.js";
 import { deriveIncrements } from "./increments.js";
 
 /** Persists one raw event and folds it into the (session, test) pageview rollup. */
 export async function processEvent(event: QueuedTrackerEventInput): Promise<void> {
-  const variantId = await resolveVariantId(event.testId, event.variantKey);
+  const resolved = await resolveVariant(event.testId, event.variantKey);
+  const variantId = resolved?.id;
   if (!variantId) {
     // Unknown/removed variant (e.g. test archived after the visitor loaded
     // the page) — drop rather than fail the whole batch.
@@ -39,7 +40,7 @@ export async function processEvent(event: QueuedTrackerEventInput): Promise<void
     })
     .onConflictDoNothing({ target: [assignments.testId, assignments.visitorId] });
 
-  const deltas = deriveIncrements(event);
+  const deltas = deriveIncrements(event, { goalOnly: resolved?.testType === "element" });
 
   await db
     .insert(pageviews)
