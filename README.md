@@ -7,18 +7,27 @@ own VPS; the WordPress plugin is a thin, HMAC-signed bridge to it.
 
 Full design: [docs/PLAN.md](docs/PLAN.md).
 
-## Status: Phase 1 (Foundation)
+## Status: Phase 2 (Statistics and the winner flow)
 
 Working end to end: connect a site to the hub, create a page/post split
 test, the plugin duplicates the post on WordPress, the hub pushes the live
 config, visitors are split and tracked (active time, scroll, hover, click —
-never page views), and the dashboard shows basic per-variant results.
+never page views). Every hour the worker scores each session (Engagement
+Score) and runs Bayesian analysis with frequentist confirmation
+(`packages/stats`). A winner is declared only when every gate passes: no
+sample-ratio mismatch, minimum sample, minimum run time, P(best) at the
+threshold, expected loss under 1%, and a click-rate guardrail. The dashboard
+shows why, then asks what to keep and whether to delete the redundant copy;
+WordPress promotes the winner into the original first and only then deletes
+or hides the copies. Test data is kept in the hub archive either way.
 
-**Not yet built** (see [docs/PLAN.md](docs/PLAN.md) §11 for the phase plan):
-statistical significance / winner detection (phase 2), the winner
-promote+cleanup flow (phase 2), the visual point-and-click editor and
-element-level tests (phase 3), heatmaps (phase 4), cross-site reuse
-library (phase 5).
+**Known gaps** (see [docs/PLAN.md](docs/PLAN.md) §11): the Engagement Score
+uses 4 of the plan's 5 components (the fifth needs phase-4 tracking); SEO-plugin
+index tables are not purged directly on cleanup; the visual point-and-click
+editor and element-level tests (phase 3), heatmaps (phase 4) and the
+cross-site reuse library (phase 5) are not built yet.
+
+Run the same checks CI runs (Node parts) with `npm run ci:local`.
 
 ## Repository layout
 
