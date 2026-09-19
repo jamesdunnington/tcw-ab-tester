@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { createHmac } from "node:crypto";
-import { signEditorToken, verifyEditorToken, EDITOR_TOKEN_TTL_SECONDS } from "../editor-token.js";
+import { signEditorToken, verifyEditorToken, renewEditorToken, EDITOR_TOKEN_TTL_SECONDS, EDITOR_SESSION_MAX_SECONDS } from "../editor-token.js";
 
 const secret = "s3cret";
 const siteKey = "tcw_abc";
@@ -56,5 +56,39 @@ describe("editor token", () => {
     const body = Buffer.from('{"sk":"tcw_abc","t":"t1","v":"b","exp":1800000300,"n":"n1"}').toString("base64url");
     const sig = createHmac("sha256", secret).update("tcwab-editor\n" + body).digest("hex");
     expect(verifyEditorToken(`${body}.${sig}`, secret, siteKey, NOW)).toMatchObject({ ok: true });
+  });
+});
+
+describe("renewEditorToken", () => {
+  it("issues a fresh token for the same test/variant and keeps the session start", () => {
+    const first = signEditorToken(base, NOW);
+    const r = renewEditorToken(first, secret, siteKey, NOW + 200);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.payload.t).toBe(base.testId);
+    expect(r.payload.v).toBe("b");
+    expect(r.payload.iat).toBe(NOW);
+    expect(r.payload.exp).toBe(NOW + 200 + EDITOR_TOKEN_TTL_SECONDS);
+    expect(verifyEditorToken(r.token, secret, siteKey, NOW + 250).ok).toBe(true);
+  });
+
+  it("cannot revive an expired token", () => {
+    const first = signEditorToken(base, NOW);
+    const r = renewEditorToken(first, secret, siteKey, NOW + EDITOR_TOKEN_TTL_SECONDS + 1);
+    expect(r).toEqual({ ok: false, reason: "expired" });
+  });
+
+  it("stops renewing once the session cap is reached", () => {
+    let token = signEditorToken(base, NOW);
+    let now = NOW;
+    // renew every 4 minutes until the cap bites
+    let result = renewEditorToken(token, secret, siteKey, now);
+    while (result.ok && now - NOW <= EDITOR_SESSION_MAX_SECONDS) {
+      token = result.token;
+      now += 240;
+      result = renewEditorToken(token, secret, siteKey, now);
+    }
+    expect(result).toEqual({ ok: false, reason: "session_too_long" });
+    expect(now - NOW).toBeGreaterThan(EDITOR_SESSION_MAX_SECONDS);
   });
 });

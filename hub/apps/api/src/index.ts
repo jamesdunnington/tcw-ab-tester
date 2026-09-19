@@ -9,6 +9,8 @@ import { authRoutes } from "./routes/auth.js";
 import { siteRoutes } from "./routes/sites.js";
 import { testRoutes } from "./routes/tests.js";
 import { editorRoutes } from "./routes/editor.js";
+import { editorApiRoutes } from "./routes/editor-api.js";
+import { corsFor } from "./lib/cors.js";
 import { resultRoutes } from "./routes/results.js";
 import { wpRoutes } from "./routes/wp.js";
 import { ingestRoutes } from "./routes/ingest.js";
@@ -35,9 +37,12 @@ app.addContentTypeParser("application/json", { parseAs: "string" }, (request, bo
 });
 
 await app.register(fastifyCookie, { secret: env.SESSION_SECRET });
+// Per-route policy: see lib/cors.ts (site origins for /ingest and /editor/*, dashboard origins elsewhere).
 await app.register(fastifyCors, {
-  origin: env.ALLOWED_ORIGINS.length > 0 ? env.ALLOWED_ORIGINS : false,
-  credentials: true,
+  delegator: (request, callback) => {
+    const pathname = request.url.split("?")[0];
+    callback(null, corsFor(pathname, env.ALLOWED_ORIGINS));
+  },
 });
 
 // Serves packages/tracker's built output (runtime-inline.js, tracker.js).
@@ -59,6 +64,7 @@ await app.register(authRoutes);
 await app.register(siteRoutes);
 await app.register(testRoutes);
 await app.register(editorRoutes);
+await app.register(editorApiRoutes);
 await app.register(resultRoutes);
 await app.register(decisionRoutes);
 await app.register(wpRoutes);

@@ -7,6 +7,7 @@ import { sites, tests, variants } from "@tcw/db";
 import { requireAuth } from "../lib/session.js";
 import { fetchPostInfo, requestVariantDuplicate, pushRuntimeConfig } from "../lib/wp-client.js";
 import { buildRuntimeConfig } from "../lib/config-builder.js";
+import { saveVariantOps } from "../lib/variant-ops.js";
 
 async function getSiteOr404(siteId: string, reply: { code: (n: number) => { send: (b: unknown) => unknown } }) {
   const [site] = await db.select().from(sites).where(eq(sites.id, siteId)).limit(1);
@@ -114,29 +115,13 @@ export async function testRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(201).send({ test, variants: created });
   });
 
-  // Replace a variant's change ops (what the visual editor saves).
+  // Replace a variant's change ops (dashboard path; the editor uses /editor/ops with its token).
   app.put("/api/tests/:id/variants/:key/ops", async (request, reply) => {
     const { id, key } = z.object({ id: z.string().uuid(), key: z.string().min(1).max(32) }).parse(request.params);
     const { ops } = z.object({ ops: changeOpsSchema }).parse(request.body);
-
-    const [test] = await db.select().from(tests).where(eq(tests.id, id)).limit(1);
-    if (!test) return reply.code(404).send({ error: "test_not_found" });
-    if (test.type !== "element") return reply.code(409).send({ error: "not_an_element_test" });
-
-    const [variant] = await db
-      .update(variants)
-      .set({ changeOps: ops })
-      .where(and(eq(variants.testId, id), eq(variants.key, key)))
-      .returning();
-    if (!variant) return reply.code(404).send({ error: "variant_not_found" });
-
-    // A live test picks the edit up right away.
-    if (test.status === "running") {
-      const site = await getSiteOr404(test.siteId, reply);
-      if (!site) return;
-      await pushRuntimeConfig(site, await buildRuntimeConfig(site.id));
-    }
-    return reply.send({ variant });
+    const saved = await saveVariantOps(id, key, ops);
+    if (!saved.ok) return reply.code(saved.status).send({ error: saved.error });
+    return reply.send({ variant: saved.variant });
   });
 
   // Step 2: ask WP to duplicate the original post into a "b" variant.
