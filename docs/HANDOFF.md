@@ -2,7 +2,7 @@
 
 Read this, then `docs/PLAN.md` (the design), then `README.md` (setup and the
 non-obvious design decisions). Repo: https://github.com/jamesdunnington/tcw-ab-tester
-(public, default branch **master**). **Phases 1 to 3 are done, and the Claude Desktop connector (`docs/MCP-PLAN.md`) is built and tested end to end.** Nothing has run in a real WordPress or on the VPS yet; that shakedown is the next job. Production hostnames: hub `https://test.thecontentwarrior.work`, MCP `https://mcptest.thecontentwarrior.work`.
+(public, default branch **master**). **Phases 1 to 3 are done, and the Claude Desktop connector (`docs/MCP-PLAN.md`) is built and tested end to end.** Nothing has run in a real WordPress or on the VPS yet. **The owner wants the remaining code (Phase 4 heatmaps, then Phase 5) finished BEFORE the deploy and shakedown**, so the next job is Phase 4, then Phase 5, then the shakedown. Work continuously without phase-boundary stops; this file is a manual input from the owner, so do not update it or offer fresh chats unless asked. Production hostnames: hub `https://test.thecontentwarrior.work`, MCP `https://mcptest.thecontentwarrior.work`.
 
 ## What exists
 
@@ -32,13 +32,31 @@ promote/cleanup/archive, decision UI. Phase 3 = visual editor, element tests, pe
 ## Not built yet
 
 **Do these next, in this order:**
+0. **Phase 4 (heatmaps), then Phase 5** (see the plan below), then steps 1 to 3.
 1. **Shakedown in a real WordPress.** `docker compose -f dev/docker-compose.yml up --build` and walk the README steps for a page test AND an element test (editor, goal, winner, permanent rule). No PHP has ever executed, so expect plugin bugs. New PHP since the last handoff: `search_posts` (`class-variants.php`, route `GET /tcwab/v1/posts`), `store_permanent_rule` (`class-finalizer.php`), `rules_for_post` (`class-runtime.php`), and the editor login redirect.
 2. **Deploy to the VPS** (DNS for `test.` and `mcptest.`, `hub/.env` including `MCP_DOMAIN`), then **verify the connector in Claude Desktop** (Settings > Connectors > Add custom connector > `https://mcptest.thecontentwarrior.work/mcp`). Only the SDK's own client has been tested, not Claude's. Watch: Claude's callback host (`ALLOWED_REDIRECT_HOSTS` in `oauth/provider.ts` allows claude.ai, claude.com and loopback; add hosts if registration is refused), token refresh, tool approval prompts.
 3. Small gaps: no TOTP (the hub has none); a permanent rule cannot be removed from the UI yet (delete its entry in option `tcwab_permanent_rules`); the hub does not re-push permanent rules to a reconnected plugin; the hover and permanent-rule paths have no automated browser test.
 
-- Phase 4: heatmaps (also unlocks the 5th Engagement Score component, "key sections seen").
+- Phase 4: heatmaps (also unlocks the 5th Engagement Score component, "key sections seen"). Plan below.
 - Phase 5: cross-site library, email notifications, consent-plugin integrations, retention jobs, backups.
 - Small known gaps: guardrail is click-rate only; SEO-plugin index tables are not purged directly on cleanup.
+
+## Phase 4 plan (drafted, no code written yet)
+
+Read docs/PLAN.md sections 4, 5 and 7 first. Existing hooks: `packages/tracker/src/tracker.ts` (click events carry only `goal`, clientX/Y; `scroll_stop` carries pct; hover carries goal + durationMs), `hub/apps/worker/src/increments.ts` (comment says heatmap consumers land in phase 4), `packages/stats/src/engagement-score.ts` (4 components; presets rescaled from the plan's 5).
+1. **Tracker:** clicks add a compact selector (`sel`, reuse `buildSelector` from `packages/editor/src/selector.ts`, mind the 8KB gz budget, currently 1.2KB) and the offset inside the element as integer percent (`ox`, `oy`). Hover adds `sel`. A new `section_view` event from an IntersectionObserver (headings, sections, goal elements; visible >=50% for >=1s, once per element per session) with `{sel, ms, total}` where `total` is how many sections are observed.
+2. **Shared/db:** add `section_view` to `trackerEventTypeSchema` and to `tracker_event_type` (pg enum, `ALTER TYPE ... ADD VALUE` in a new migration 0003, additive). New table `heat_bins` (test_id, variant_id, device, layer click|hover|scroll|attention, selector, cell_x, cell_y, count, weight) with a unique index for upserts. Generate the migration with `DATABASE_URL=postgres://x:x@localhost:5432/x npx drizzle-kit generate` from `hub/apps/api`.
+3. **Worker:** pure `deriveHeatBins(event)` (unit-tested, like `deriveIncrements`) plus upserts in `process-event.ts`; clicks on a 10x10 grid per selector, scroll_stop in 5% bins, hover weighted by duration, attention counted per session per selector. Per-session share of sections seen feeds the Engagement Score.
+4. **Stats:** add the fifth component ("key sections seen") to `engagement-score.ts` using the plan's weights (CTA 10, content 20, landing 15) and update `stats-input.ts` and its tests; keep old sessions without section data scored on the four-component rescale.
+5. **Core + API + MCP:** `getHeatmap(testId, {variantKey?, device?})` in `@tcw/core` (top clicked/hovered/attended elements, scroll drop-off histogram, dead-click and rage-click hotspots), route `GET /api/tests/:id/heatmap`, MCP read tool `get_heatmap` so Claude can analyse it, and mention it in the server instructions in `hub/apps/mcp/src/server.ts`.
+6. **Overlay:** a second bundle (`heatmap.js`, built like `editor.js` into `hub/apps/api/public`, add it to the Caddyfile and the api Dockerfile build; `/editor.js` and `/editor/*` are already routed) loaded by `class-editor-bridge.php` when the page has `?tcwab_heatmap=TOKEN` (same signed token, same `edit_pages` gate). It fetches bins from a new token-authenticated `GET /editor/heatmap` (CORS is already per-route for `/editor/*`) and draws layers with CSS radial gradients in the Shadow DOM (no screenshot service; filters for variant, device, layer). Add "View heatmap" to the dashboard test page.
+7. **Dashboard:** heatmap section on the test detail page (top elements table per layer plus the scroll histogram); verify at desktop and 375px, light and dark. Tests for every new pure function; extend the PGlite e2e test in `hub/apps/mcp/src/__tests__/e2e.test.ts` for the new SQL.
+
+## Phase 5 (after 4)
+Cross-site library (archived tests become library items, apply to another site; PLAN.md section 10), email notifications (winner found), consent-plugin integrations (WP Consent API is partly there; Complianz, CookieYes), retention jobs (raw events dropped after 90 days, partitioning), backups (`pg_dump` cron to off-box storage). Also the MCP tools for the library.
+
+## State at the end of the last chat
+Everything is committed and pushed (last code commit `d95ca62`: Caddyfile now routes `/editor.js` and `/editor/*`, and the api Dockerfile builds the editor bundle; both were deploy bugs found by reading). CI is green. 179 tests. The hub has never been built as a Docker image and the plugin has never run in WordPress (the hub is on a VPS, the WordPress sites are on separate servers, so both must reach each other over public HTTPS; the hub calls `https://<site>/wp-json/tcwab/v1/...`).
 
 ## Phase 3 design decisions (already made)
 
