@@ -1,45 +1,81 @@
+import { EditorApi, type EditorBoot } from "./api.js";
+import { OpStore } from "./ops.js";
+import { createPicker, mountOverlay } from "./picker.js";
+import { PreviewRenderer } from "./preview.js";
 import { buildSelector, fingerprint } from "./selector.js";
-import { mountOverlay, createPicker } from "./picker.js";
+import { Sidebar } from "./ui.js";
 
 /**
  * Visual editor entry. Loaded by the WordPress plugin's editor bridge only for
  * a verified hub admin (see wp-plugin includes/class-editor-bridge.php), which
  * sets window.__TCWAB_EDITOR__ first.
  */
-interface EditorBoot {
-  hubUrl: string;
-  siteKey: string;
-  testId: string;
-  variantKey: string;
-  token: string;
-  expiresAt: number;
-}
-
 declare global {
   interface Window {
     __TCWAB_EDITOR__?: EditorBoot;
   }
 }
 
-function boot(): void {
+/** Approximate device preview: narrows the page. Media queries still follow the real window. */
+function setPageWidth(px: number | null): void {
+  const s = document.documentElement.style;
+  s.maxWidth = px ? `${px}px` : "";
+  s.marginLeft = s.marginRight = px ? "auto" : "";
+}
+
+async function boot(): Promise<void> {
   const cfg = window.__TCWAB_EDITOR__;
   if (!cfg) return;
 
   const overlay = mountOverlay();
-  const bar = document.createElement("div");
-  bar.style.cssText =
-    "position:fixed;left:12px;bottom:12px;max-width:min(420px,90vw);padding:10px 12px;border-radius:8px;" +
-    "background:#0f172a;color:#f8fafc;font:13px/1.4 system-ui,sans-serif;pointer-events:auto;box-shadow:0 4px 16px rgba(0,0,0,.3);";
-  bar.textContent = `Editing variant ${cfg.variantKey.toUpperCase()} - click any element`;
-  overlay.root.appendChild(bar);
+  const api = new EditorApi(cfg);
 
-  const picker = createPicker(overlay, (el) => {
-    const selector = buildSelector(el);
-    const fp = fingerprint(el);
-    bar.textContent = `Selected: ${selector}`;
-    window.dispatchEvent(new CustomEvent("tcwab:pick", { detail: { selector, fp } }));
+  let initial: Awaited<ReturnType<EditorApi["loadOps"]>> = [];
+  let loadError = "";
+  try {
+    initial = await api.loadOps();
+  } catch (e) {
+    loadError = (e as Error).message;
+  }
+
+  const store = new OpStore(initial);
+  const preview = new PreviewRenderer();
+  preview.render(store.ops);
+  store.subscribe(() => preview.render(store.ops));
+
+  const sidebar = new Sidebar(overlay.root, store, {
+    variantKey: cfg.variantKey,
+    // Never save over edits we failed to load: that would silently erase them.
+    onSave: () => (loadError ? Promise.reject(new Error("saved edits could not be loaded")) : api.saveOps(store.ops)),
+    onWidth: setPageWidth,
   });
-  picker.start();
+  if (loadError) sidebar.setStatus(`Could not load saved edits: ${loadError}. Saving is disabled until you reopen the editor.`, true);
+
+  api.onAuthLost = (reason) => sidebar.setStatus(`Editor session ended (${reason}). Save your work by reopening the editor from the hub.`, true);
+  api.startRenewing();
+
+  createPicker(overlay, (el) => {
+    sidebar.select({
+      selector: buildSelector(el),
+      fp: fingerprint(el),
+      tag: el.tagName.toLowerCase(),
+      hasChildren: el.children.length > 0,
+      text: (el.textContent ?? "").trim(),
+      href: el.getAttribute("href") ?? "",
+    });
+  }).start();
+
+  document.addEventListener("keydown", (e) => {
+    const typing = e.composedPath().some((n) => n instanceof HTMLInputElement || n instanceof HTMLTextAreaElement);
+    if (typing || !(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z") return;
+    e.preventDefault();
+    if (e.shiftKey) store.redo();
+    else store.undo();
+  });
+
+  window.addEventListener("beforeunload", (e) => {
+    if (store.dirty) e.preventDefault();
+  });
 }
 
-boot();
+void boot();
