@@ -12,6 +12,13 @@
 	handle /runtime-inline.js {
 		reverse_proxy api:4000
 	}
+	# The visual editor: bundle loaded by the WP plugin, and its token-authenticated API.
+	handle /editor.js {
+		reverse_proxy api:4000
+	}
+	handle /editor/* {
+		reverse_proxy api:4000
+	}
 	handle /tracker.js {
 		reverse_proxy api:4000
 	}
