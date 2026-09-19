@@ -81,3 +81,14 @@ export type SiteRegisterInput = z.infer<typeof siteRegisterSchema>;
 export type TrackerEventInput = z.infer<typeof trackerEventSchema>;
 export type QueuedTrackerEventInput = z.infer<typeof queuedTrackerEventSchema>;
 export type IngestBatchInput = z.infer<typeof ingestBatchSchema>;
+
+/** The owner's final call on a finished test (docs/PLAN.md section 6). */
+export const decisionInputSchema = z.object({
+  /** Which variant to end up with: "a" keeps the original, any other key applies that variant to it. */
+  chosenVariantKey: z.string().min(1).max(32),
+  deleteRedundant: z.boolean(),
+  /** Optional, but required by the API when overriding the stats engine's recommendation. */
+  reason: z.string().max(1000).optional(),
+});
+
+export type DecisionInput = z.infer<typeof decisionInputSchema>;

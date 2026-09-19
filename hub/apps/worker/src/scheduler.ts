@@ -1,8 +1,9 @@
 import { Queue, Worker } from "bullmq";
+import { STATS_QUEUE } from "@tcw/shared";
 import { env } from "./env.js";
 import { recomputeAllLive, recomputeTest } from "./stats-job.js";
 
-export const STATS_QUEUE = "tcw-stats";
+
 const HOURLY_MS = 60 * 60 * 1000;
 
 function redisConnection() {

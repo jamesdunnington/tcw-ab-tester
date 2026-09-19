@@ -88,3 +88,26 @@ export interface WpPostInfo {
 export async function fetchPostInfo(site: SiteRow, wpPostId: number): Promise<WpPostInfo> {
   return wpRequest<WpPostInfo>(site, "GET", `/wp-json/tcwab/v1/posts/${wpPostId}`);
 }
+
+export interface FinalizePayload {
+  testId: string;
+  testName: string;
+  sourcePostId: number;
+  chosenKey: string;
+  deleteRedundant: boolean;
+  startedAt: string | null;
+  variants: Array<{ key: string; postId: number | null; isControl: boolean }>;
+}
+
+export interface FinalizeManifest {
+  promoted: boolean;
+  revisionSaved: boolean;
+  deleted: unknown[];
+  retired: number[];
+  errors: Array<{ postId: number; error: string }>;
+}
+
+/** One signed call that promotes the winner, then deletes/retires the copies, on the WP side. */
+export async function finalizeTest(site: SiteRow, payload: FinalizePayload): Promise<FinalizeManifest> {
+  return wpRequest<FinalizeManifest>(site, "POST", "/wp-json/tcwab/v1/finalize", payload);
+}

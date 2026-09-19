@@ -11,6 +11,7 @@ import { testRoutes } from "./routes/tests.js";
 import { resultRoutes } from "./routes/results.js";
 import { wpRoutes } from "./routes/wp.js";
 import { ingestRoutes } from "./routes/ingest.js";
+import { decisionRoutes } from "./routes/decisions.js";
 
 const app = Fastify({
   logger: {
@@ -57,6 +58,7 @@ await app.register(authRoutes);
 await app.register(siteRoutes);
 await app.register(testRoutes);
 await app.register(resultRoutes);
+await app.register(decisionRoutes);
 await app.register(wpRoutes);
 await app.register(ingestRoutes);
 

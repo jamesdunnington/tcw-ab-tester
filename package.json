@@ -14,7 +14,8 @@
     "dev:api": "npm run dev -w @tcw/api",
     "dev:worker": "npm run dev -w @tcw/worker",
     "dev:dashboard": "npm run dev -w @tcw/dashboard",
-    "tracker:build": "npm run build -w @tcw/tracker"
+    "tracker:build": "npm run build -w @tcw/tracker",
+    "ci:local": "npm run build && npm test"
   },
   "devDependencies": {
     "typescript": "^5.6.3"
