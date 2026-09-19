@@ -89,6 +89,8 @@ export const tests = pgTable("tests", {
   wpPostId: integer("wp_post_id").notNull(),
   wpPostType: wpPostTypeEnum("wp_post_type").notNull().default("page"),
   wpPermalink: text("wp_permalink").notNull(),
+  /** Word count of the original post, fetched from WP at creation; drives expected read time in the Engagement Score. */
+  wordCount: integer("word_count").notNull().default(0),
   trafficSplit: integer("traffic_split").notNull().default(50),
   minSampleSize: integer("min_sample_size").notNull().default(200),
   minRunDays: integer("min_run_days").notNull().default(7),
@@ -189,3 +191,33 @@ export const sessions = pgTable("sessions", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 });
+
+/** The user's final call on a finished test (docs/PLAN.md section 6): keep A or apply B, and whether to delete the redundant copy. */
+export const decisions = pgTable("decisions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  testId: uuid("test_id").notNull().references(() => tests.id, { onDelete: "cascade" }),
+  chosenVariantId: uuid("chosen_variant_id").notNull().references(() => variants.id),
+  /** Variant the stats engine recommended, so overriding the recommendation is visible in the record. */
+  recommendedVariantKey: text("recommended_variant_key"),
+  deleteRedundant: boolean("delete_redundant").notNull(),
+  reason: text("reason"),
+  decidedBy: uuid("decided_by").references(() => users.id),
+  /** What WordPress reported deleting/promoting, kept permanently even after the copy is gone. */
+  cleanupManifest: jsonb("cleanup_manifest"),
+  decidedAt: timestamp("decided_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  testIdx: uniqueIndex("decisions_test_idx").on(t.testId),
+}));
+
+/** Hourly stats results, kept for the confidence-over-time trend and as the permanent archive of final numbers. */
+export const statsSnapshots = pgTable("stats_snapshots", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  testId: uuid("test_id").notNull().references(() => tests.id, { onDelete: "cascade" }),
+  computedAt: timestamp("computed_at", { withTimezone: true }).notNull().defaultNow(),
+  status: text("status").notNull(),
+  winnerKey: text("winner_key"),
+  /** Full WinnerDecision from @tcw/stats: gates, per-variant analysis, SRM. */
+  result: jsonb("result").notNull(),
+}, (t) => ({
+  testComputedIdx: index("stats_snapshots_test_computed_idx").on(t.testId, t.computedAt),
+}));

@@ -56,6 +56,7 @@ export async function testRoutes(app: FastifyInstance): Promise<void> {
         wpPostId: postInfo.id,
         wpPostType: postInfo.type,
         wpPermalink: postInfo.permalink,
+        wordCount: postInfo.wordCount,
         trafficSplit: body.trafficSplit,
         minSampleSize: body.minSampleSize,
         minRunDays: body.minRunDays,
