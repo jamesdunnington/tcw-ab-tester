@@ -8,3 +8,6 @@ export * from "./frequentist/chi-square-srm.js";
 export * from "./frequentist/holm-bonferroni.js";
 export * from "./bayesian/bayesian-binary.js";
 export * from "./bayesian/bayesian-bootstrap.js";
+export * from "./engagement-score.js";
+export * from "./sample-size.js";
+export * from "./winner-decision.js";
