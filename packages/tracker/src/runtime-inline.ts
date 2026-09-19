@@ -14,11 +14,16 @@
  * (docs/PLAN.md section 12).
  */
 
+import type { ChangeOp } from "@tcw/shared";
+import { runOps } from "./applier.js";
+
 interface TcwabVariantConfig {
   key: string;
   weight: number;
   isControl: boolean;
   redirectUrl?: string;
+  /** Element tests: DOM change operations applied for this variant (see @tcw/shared change-ops). */
+  ops?: ChangeOp[];
 }
 
 interface TcwabTestConfig {
@@ -141,6 +146,8 @@ function pickVariant(visitorId: string, test: TcwabTestConfig): TcwabVariantConf
       location.replace(variant.redirectUrl);
       return; // one redirect per page load is enough; the new load re-runs this script
     }
+
+    if (variant.ops && variant.ops.length) runOps(variant.ops);
 
     contexts.push({
       siteKey: cfg.siteKey,
