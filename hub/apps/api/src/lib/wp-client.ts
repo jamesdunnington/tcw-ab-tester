@@ -96,11 +96,14 @@ export interface FinalizePayload {
   chosenKey: string;
   deleteRedundant: boolean;
   startedAt: string | null;
+  /** Element tests: the winning change set (goals stripped), stored as a permanent rule with no tracking. */
+  permanentOps?: ChangeOp[];
   variants: Array<{ key: string; postId: number | null; isControl: boolean }>;
 }
 
 export interface FinalizeManifest {
   promoted: boolean;
+  permanentRule?: boolean;
   revisionSaved: boolean;
   deleted: unknown[];
   retired: number[];

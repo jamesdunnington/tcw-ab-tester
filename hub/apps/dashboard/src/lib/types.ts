@@ -57,6 +57,8 @@ export interface Variant {
   trafficWeight: number;
   wpPostId: number | null;
   previewUrl: string | null;
+  /** Element tests: the variant's change operations (validated on the hub). */
+  changeOps?: Array<{ op: string }> | null;
   createdAt: string;
 }
 

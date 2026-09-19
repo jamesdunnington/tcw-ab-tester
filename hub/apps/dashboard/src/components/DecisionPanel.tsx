@@ -6,13 +6,15 @@ import { Icon } from "./Icon.js";
 
 interface Props {
   testId: string;
+  /** Element tests have no copy to delete; the winning edits become a permanent change instead. */
+  testType: "page" | "element";
   variants: Variant[];
   recommendedKey: string | null;
   onDone: () => void;
 }
 
 /** The two questions from docs/PLAN.md section 6: which version to keep, and whether to delete the redundant copy. */
-export function DecisionPanel({ testId, variants, recommendedKey, onDone }: Props) {
+export function DecisionPanel({ testId, testType, variants, recommendedKey, onDone }: Props) {
   const [chosen, setChosen] = useState(recommendedKey ?? variants.find((v) => v.isControl)?.key ?? variants[0].key);
   const [deleteRedundant, setDeleteRedundant] = useState(false);
   const [reason, setReason] = useState("");
@@ -22,6 +24,7 @@ export function DecisionPanel({ testId, variants, recommendedKey, onDone }: Prop
   const [reasonError, setReasonError] = useState<string | null>(null);
 
   const chosenVariant = variants.find((v) => v.key === chosen)!;
+  const isElement = testType === "element";
   const overriding = recommendedKey !== null && chosen !== recommendedKey;
 
   function review(e: FormEvent) {
@@ -38,7 +41,7 @@ export function DecisionPanel({ testId, variants, recommendedKey, onDone }: Prop
   async function submit() {
     setBusy(true);
     try {
-      await api.post(`/api/tests/${testId}/decision`, { chosenVariantKey: chosen, deleteRedundant, reason: reason.trim() || undefined });
+      await api.post(`/api/tests/${testId}/decision`, { chosenVariantKey: chosen, deleteRedundant: isElement ? false : deleteRedundant, reason: reason.trim() || undefined });
       setConfirming(false);
       onDone();
     } catch (err) {
@@ -74,21 +77,21 @@ export function DecisionPanel({ testId, variants, recommendedKey, onDone }: Prop
         </div>
       )}
 
-      <div className="field">
+      {!isElement && <div className="field">
         <label className="choice">
           <input type="checkbox" checked={deleteRedundant} onChange={(e) => setDeleteRedundant(e.target.checked)} />
           <span>Delete the redundant test copy from WordPress<br /><span className="hint">Unchecked, it is kept as a hidden draft. The test results are kept either way.</span></span>
         </label>
-      </div>
+      </div>}
 
       {error && <div className="banner banner-danger" role="alert"><Icon name="alert" /><div><strong>Nothing was deleted.</strong> {error}</div></div>}
 
       <button type="submit" className="btn">Review decision</button>
 
-      <ConfirmDialog open={confirming} title="Confirm your decision" confirmLabel={deleteRedundant ? "Apply and delete copy" : "Apply decision"} danger={deleteRedundant} busy={busy} onConfirm={submit} onCancel={() => setConfirming(false)}>
+      <ConfirmDialog open={confirming} title="Confirm your decision" confirmLabel={!isElement && deleteRedundant ? "Apply and delete copy" : "Apply decision"} danger={!isElement && deleteRedundant} busy={busy} onConfirm={submit} onCancel={() => setConfirming(false)}>
         <ul>
-          <li>{chosenVariant.isControl ? "The original page stays exactly as it is." : `The original page's content is replaced with “${chosenVariant.label}”. WordPress saves a revision of the current content first.`}</li>
-          <li>{deleteRedundant ? <strong>The test copy is permanently deleted from WordPress. This cannot be undone.</strong> : "The test copy is kept as a hidden draft."}</li>
+          <li>{chosenVariant.isControl ? "The original page stays exactly as it is." : isElement ? `The edits from “${chosenVariant.label}” become a permanent change on the page, shown to every visitor with no tracking.` : `The original page's content is replaced with “${chosenVariant.label}”. WordPress saves a revision of the current content first.`}</li>
+          {!isElement && <li>{deleteRedundant ? <strong>The test copy is permanently deleted from WordPress. This cannot be undone.</strong> : "The test copy is kept as a hidden draft."}</li>}
           <li>The test stops splitting visitors and moves to the archive.</li>
         </ul>
       </ConfirmDialog>

@@ -53,6 +53,11 @@ class TCWAB_Finalizer {
 			}
 		}
 
+		$permanent = $this->store_permanent_rule($source_id, (string) ($p['testId'] ?? ''), $p['permanentOps'] ?? null);
+		if ($permanent) {
+			$manifest['permanentRule'] = true;
+		}
+
 		$purge_ids = [$source_id];
 		foreach ($variants as $v) {
 			$post_id = (int) ($v['postId'] ?? 0);
@@ -85,6 +90,32 @@ class TCWAB_Finalizer {
 		]);
 
 		return $manifest;
+	}
+
+	/**
+	 * Element tests: keep the winning change set as a permanent rule, served to everyone by the
+	 * inline runtime. The hub has already validated the ops; this only drops malformed entries.
+	 *
+	 * @param mixed $ops
+	 */
+	private function store_permanent_rule(int $post_id, string $test_id, $ops): bool {
+		if ('' === $test_id || !is_array($ops)) {
+			return false;
+		}
+		$clean = [];
+		foreach ($ops as $op) {
+			if (is_array($op) && is_string($op['op'] ?? null) && is_string($op['selector'] ?? null) && 'goal' !== $op['op']) {
+				$clean[] = $op;
+			}
+		}
+		if (empty($clean)) {
+			return false;
+		}
+		$rules = get_option('tcwab_permanent_rules', []);
+		$rules = is_array($rules) ? $rules : [];
+		$rules[sanitize_text_field($test_id)] = ['postId' => $post_id, 'ops' => $clean];
+		update_option('tcwab_permanent_rules', $rules, false);
+		return true;
 	}
 
 	private function to_mysql_date($iso): ?string {

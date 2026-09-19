@@ -34,7 +34,8 @@ class TCWAB_Runtime {
 
 		$post_id      = get_queried_object_id();
 		$active_tests = $this->tests_for_post($post_id);
-		if (empty($active_tests)) {
+		$rules        = self::rules_for_post($post_id);
+		if (empty($active_tests) && empty($rules)) {
 			return;
 		}
 
@@ -43,6 +44,7 @@ class TCWAB_Runtime {
 			'siteKey'   => $this->hub_client->get_site_key(),
 			'consent'   => $this->has_tracking_consent(),
 			'tests'     => $active_tests,
+			'rules'     => $rules,
 		];
 
 		echo "<script>window.__TCWAB_CONFIG__=" . wp_json_encode($config) . ";</script>\n";
@@ -52,7 +54,28 @@ class TCWAB_Runtime {
 			echo "<script>" . $runtime_js . "</script>\n"; // phpcs:ignore WordPress.Security.EscapeOutput -- pre-built, non-user-controlled bundle
 		}
 
-		wp_enqueue_script('tcwab-tracker', TCWAB_PLUGIN_URL . 'assets/tracker.js', [], TCWAB_VERSION, true);
+		if (!empty($active_tests)) {
+			wp_enqueue_script('tcwab-tracker', TCWAB_PLUGIN_URL . 'assets/tracker.js', [], TCWAB_VERSION, true);
+		}
+	}
+
+	/**
+	 * Winning element-test changes served to everyone, with no assignment and no tracking.
+	 *
+	 * @return array<int, array<int, array<string, mixed>>> one ops list per decided test
+	 */
+	public static function rules_for_post(int $post_id): array {
+		$rules = get_option('tcwab_permanent_rules', []);
+		if (!is_array($rules)) {
+			return [];
+		}
+		$out = [];
+		foreach ($rules as $rule) {
+			if (is_array($rule) && (int) ($rule['postId'] ?? 0) === $post_id && is_array($rule['ops'] ?? null) && !empty($rule['ops'])) {
+				$out[] = array_values($rule['ops']);
+			}
+		}
+		return $out;
 	}
 
 	/**

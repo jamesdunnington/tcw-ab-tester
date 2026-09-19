@@ -32,6 +32,8 @@ interface TcwabTestConfig {
 }
 
 interface TcwabConfig {
+  /** Decided element tests: the winning ops, applied to every visitor with no assignment and no tracking. */
+  rules?: ChangeOp[][];
   ingestUrl: string;
   /**
    * The hub PUBLIC site key. Never the hub internal site UUID - the
@@ -116,7 +118,9 @@ function pickVariant(visitorId: string, test: TcwabTestConfig): TcwabVariantConf
 
 (function init() {
   const cfg = window.__TCWAB_CONFIG__;
-  if (!cfg || !cfg.tests || cfg.tests.length === 0) return;
+  if (!cfg) return;
+  if (cfg.rules) for (const r of cfg.rules) runOps(r);
+  if (!cfg.tests || cfg.tests.length === 0) return;
 
   const visitorId = getCookie("tcwab_vid") ?? uuidv4();
   setCookie("tcwab_vid", visitorId, 365);

@@ -109,21 +109,28 @@ function main(): void {
     }
   }
 
+  // Delegated, so goal elements the change-op observer creates later are tracked too.
   function setupHoverTracking(): void {
-    document.querySelectorAll("[data-tcwab-goal]").forEach((el) => {
-      let enterAt = 0;
-      el.addEventListener("mouseenter", () => {
+    let hoverEl: Element | null = null;
+    let enterAt = 0;
+    const goalOf = (t: EventTarget | null) => (t instanceof Element ? t.closest("[data-tcwab-goal]") : null);
+    document.addEventListener("mouseover", (e) => {
+      const el = goalOf(e.target);
+      if (el && el !== hoverEl) {
+        hoverEl = el;
         enterAt = Date.now();
-      });
-      el.addEventListener("mouseleave", () => {
-        if (!enterAt) return;
-        const durationMs = Date.now() - enterAt;
-        enterAt = 0;
-        if (durationMs >= HOVER_MIN_MS) {
-          emit("hover", { goal: el.getAttribute("data-tcwab-goal"), durationMs });
-        }
-      });
-    });
+      }
+    }, true);
+    document.addEventListener("mouseout", (e) => {
+      if (!hoverEl) return;
+      const to = e.relatedTarget;
+      if (to instanceof Node && hoverEl.contains(to)) return; // still inside the goal element
+      const durationMs = Date.now() - enterAt;
+      const goal = hoverEl.getAttribute("data-tcwab-goal");
+      hoverEl = null;
+      enterAt = 0;
+      if (durationMs >= HOVER_MIN_MS) emit("hover", { goal, durationMs });
+    }, true);
   }
 
   function flush(final: boolean): void {

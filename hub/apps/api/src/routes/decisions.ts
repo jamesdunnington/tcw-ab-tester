@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { and, desc, eq, inArray } from "drizzle-orm";
-import { decisionInputSchema, RECOMPUTE_TEST_JOB } from "@tcw/shared";
+import { changeOpsSchema, decisionInputSchema, RECOMPUTE_TEST_JOB } from "@tcw/shared";
 import { auditLog, decisions, sites, statsSnapshots, tests, variants } from "@tcw/db";
 import { db } from "../db/client.js";
 import { requireAuth } from "../lib/session.js";
@@ -71,6 +71,12 @@ export async function decisionRoutes(app: FastifyInstance): Promise<void> {
     const [site] = await db.select().from(sites).where(eq(sites.id, test.siteId)).limit(1);
     if (!site) return reply.code(404).send({ error: "site_not_found" });
 
+    // Element tests have no variant copy to delete. The winning edits become a permanent rule,
+    // served to everyone with no tracking, so goal markers are dropped.
+    const isElement = test.type === "element";
+    const deleteRedundant = isElement ? false : body.deleteRedundant;
+    const permanentOps = isElement && !chosen.isControl ? changeOpsSchema.catch([]).parse(chosen.changeOps ?? []).filter((o) => o.op !== "goal") : undefined;
+
     // Atomic claim: a double-click or second tab cannot run the flow twice.
     const previousStatus = test.status;
     const claimed = await db
@@ -89,7 +95,8 @@ export async function decisionRoutes(app: FastifyInstance): Promise<void> {
         testName: test.name,
         sourcePostId: test.wpPostId,
         chosenKey: chosen.key,
-        deleteRedundant: body.deleteRedundant,
+        deleteRedundant,
+        permanentOps,
         startedAt: test.startedAt?.toISOString() ?? null,
         variants: variantRows.map((v) => ({ key: v.key, postId: v.wpPostId, isControl: v.isControl })),
       });
@@ -98,7 +105,7 @@ export async function decisionRoutes(app: FastifyInstance): Promise<void> {
         testId: id,
         chosenVariantId: chosen.id,
         recommendedVariantKey: recommended,
-        deleteRedundant: body.deleteRedundant,
+        deleteRedundant,
         reason: body.reason ?? null,
         decidedBy: request.currentUser!.id,
         cleanupManifest: manifest,
@@ -108,7 +115,7 @@ export async function decisionRoutes(app: FastifyInstance): Promise<void> {
         actor: request.currentUser!.email,
         action: "test.decided",
         target: id,
-        meta: { chosen: chosen.key, recommended, deleteRedundant: body.deleteRedundant, errors: manifest.errors.length },
+        meta: { chosen: chosen.key, recommended, deleteRedundant, errors: manifest.errors.length },
       });
       return reply.send({ ok: true, manifest });
     } catch (err) {

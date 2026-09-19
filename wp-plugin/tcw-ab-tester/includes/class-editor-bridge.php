@@ -60,7 +60,9 @@ class TCWAB_Editor_Bridge {
 
 		if (!is_user_logged_in()) {
 			// After logging in WordPress sends them back here; the token lives 5 minutes.
-			wp_safe_redirect(wp_login_url(home_url(add_query_arg([]))));
+			// Rebuilt from the permalink, not the request URI, so subfolder installs do not double the path.
+			$back = is_singular() ? get_permalink() : home_url('/');
+			wp_safe_redirect(wp_login_url(add_query_arg(self::QUERY_ARG, rawurlencode($token), $back)));
 			exit;
 		}
 		if (!current_user_can('edit_pages')) {

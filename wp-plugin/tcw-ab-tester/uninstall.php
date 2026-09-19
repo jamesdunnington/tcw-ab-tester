@@ -14,6 +14,7 @@ delete_option('tcwab_hub_url');
 delete_option('tcwab_site_key');
 delete_option('tcwab_site_secret');
 delete_option('tcwab_runtime_config');
+delete_option('tcwab_permanent_rules');
 delete_option('tcwab_db_version');
 
 global $wpdb;

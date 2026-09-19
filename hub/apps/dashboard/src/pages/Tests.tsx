@@ -8,6 +8,7 @@ export function TestsPage() {
   const { siteId } = useParams<{ siteId: string }>();
   const [tests, setTests] = useState<Test[]>([]);
   const [loading, setLoading] = useState(true);
+  const [kind, setKind] = useState<"page" | "element">("page");
   const [wpPostId, setWpPostId] = useState("");
   const [trafficSplit, setTrafficSplit] = useState(50);
   const [creating, setCreating] = useState(false);
@@ -25,7 +26,7 @@ export function TestsPage() {
     setError(null);
     setCreating(true);
     try {
-      await api.post("/api/tests", { siteId, wpPostId: Number(wpPostId), trafficSplit });
+      await api.post(kind === "page" ? "/api/tests" : "/api/element-tests", { siteId, wpPostId: Number(wpPostId), trafficSplit });
       setWpPostId("");
       refresh();
     } catch {
@@ -41,7 +42,18 @@ export function TestsPage() {
       <h1>Tests</h1>
 
       <form className="card" onSubmit={onCreate}>
-        <h2 style={{ marginTop: 0 }}>New page or post test</h2>
+        <h2 style={{ marginTop: 0 }}>New test</h2>
+        <fieldset className="field" style={{ border: 0, padding: 0, margin: "0 0 var(--space-3)" }}>
+          <legend>What are you testing?</legend>
+          <label className="choice">
+            <input type="radio" name="kind" checked={kind === "page"} onChange={() => setKind("page")} />
+            <span>A whole page or post<br /><span className="hint">WordPress makes a copy. You edit the copy and the two versions compete.</span></span>
+          </label>
+          <label className="choice">
+            <input type="radio" name="kind" checked={kind === "element"} onChange={() => setKind("element")} />
+            <span>Elements on a page<br /><span className="hint">Change text, colours or visibility with the visual editor. No copy is made.</span></span>
+          </label>
+        </fieldset>
         <div className="form-row">
           <div className="field">
             <label htmlFor="post-id">WordPress post or page ID</label>
@@ -66,11 +78,12 @@ export function TestsPage() {
         <div className="table-wrap">
           <table className="data-table">
             <caption className="visually-hidden">Tests for this site</caption>
-            <thead><tr><th>Name</th><th>Status</th><th>WordPress post</th><th><span className="visually-hidden">Actions</span></th></tr></thead>
+            <thead><tr><th>Name</th><th>Type</th><th>Status</th><th>WordPress post</th><th><span className="visually-hidden">Actions</span></th></tr></thead>
             <tbody>
               {tests.map((t) => (
                 <tr key={t.id}>
                   <td>{t.name}</td>
+                  <td>{t.type === "element" ? "Elements" : "Page"}</td>
                   <td><StatusBadge status={t.status} /></td>
                   <td><a href={t.wpPermalink} target="_blank" rel="noreferrer">#{t.wpPostId}<span className="visually-hidden"> (opens in a new tab)</span></a></td>
                   <td><Link to={`/tests/${t.id}`}>Open<span className="visually-hidden"> {t.name}</span></Link></td>

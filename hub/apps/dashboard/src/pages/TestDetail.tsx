@@ -33,6 +33,22 @@ export function TestDetailPage() {
 
   useEffect(load, [load]);
 
+  // The visual editor saves in another tab; refresh the edit counts when the owner comes back.
+  useEffect(() => {
+    window.addEventListener("focus", load);
+    return () => window.removeEventListener("focus", load);
+  }, [load]);
+
+  async function openEditor(variantKey: string) {
+    setError(null);
+    try {
+      const { url } = await api.post<{ url: string }>(`/api/tests/${testId}/variants/${variantKey}/editor-link`);
+      window.open(url, "_blank", "noopener");
+    } catch (err) {
+      setError(err instanceof Error ? `Could not open the editor (${err.message}).` : "Could not open the editor.");
+    }
+  }
+
   async function act(path: string, body: unknown, success: string, failure: string) {
     setError(null);
     setNotice(null);
@@ -67,6 +83,11 @@ export function TestDetailPage() {
   const isLive = LIVE.includes(test.status) && !test.endedAt;
   const decidable = test.status === "winner_found" || test.status === "inconclusive";
   const threshold = Number(test.confidenceThreshold);
+  const isElement = test.type === "element";
+  const editCount = (v: Variant) => (v.changeOps ?? []).filter((o) => o.op !== "goal").length;
+  const goalCount = (v: Variant) => (v.changeOps ?? []).filter((o) => o.op === "goal").length;
+  const hasEdits = variants.some((v) => !v.isControl && editCount(v) > 0);
+  const editable = test.status === "draft" || test.status === "qa";
   const winnerLabel = variants.find((v) => v.key === stats?.latest?.winnerKey)?.label;
 
   return (
@@ -113,7 +134,7 @@ export function TestDetailPage() {
           <Icon name="archive" />
           <div>
             <strong>Decided on {new Date(stats.decision.decidedAt).toLocaleDateString()}.</strong>{" "}
-            {stats.decision.deleteRedundant ? "The redundant copy was deleted." : "The redundant copy was kept as a hidden draft."}{" "}
+            {isElement ? "The winning edits are now a permanent change on the page." : stats.decision.deleteRedundant ? "The redundant copy was deleted." : "The redundant copy was kept as a hidden draft."}{" "}
             {stats.decision.reason ? `Reason: ${stats.decision.reason} ` : ""}Results stay in the archive.
           </div>
         </div>
@@ -124,7 +145,7 @@ export function TestDetailPage() {
         <table className="data-table">
           <caption className="visually-hidden">Variants in this test</caption>
           <thead>
-            <tr><th>Key</th><th>Label</th><th className="num">Traffic</th><th>Preview</th></tr>
+            <tr><th>Key</th><th>Label</th><th className="num">Traffic</th><th>{isElement ? "Changes" : "Preview"}</th></tr>
           </thead>
           <tbody>
             {variants.map((v) => (
@@ -133,7 +154,14 @@ export function TestDetailPage() {
                 <td>{v.label}{v.isControl && !/original/i.test(v.label) ? " (original)" : ""}</td>
                 <td className="num">{v.trafficWeight}%</td>
                 <td>
-                  {v.previewUrl ? (
+                  {isElement ? (
+                    v.isControl ? "—" : (
+                      <span>
+                        {editCount(v)} {editCount(v) === 1 ? "edit" : "edits"}, {goalCount(v)} {goalCount(v) === 1 ? "goal" : "goals"}{" "}
+                        {editable && <button type="button" className="btn btn-secondary" onClick={() => openEditor(v.key)}>Edit variant<span className="visually-hidden"> {v.label} in the visual editor</span></button>}
+                      </span>
+                    )
+                  ) : v.previewUrl ? (
                     <a href={v.previewUrl} target="_blank" rel="noreferrer">Preview<span className="visually-hidden"> {v.label} (opens in a new tab)</span></a>
                   ) : "—"}
                 </td>
@@ -143,7 +171,7 @@ export function TestDetailPage() {
         </table>
       </div>
 
-      {test.status === "draft" && variants.length < 2 && (
+      {test.status === "draft" && !isElement && variants.length < 2 && (
         <form className="card" onSubmit={addVariant} style={{ marginTop: 16 }}>
           <div className="form-row">
             <div className="field">
@@ -155,9 +183,12 @@ export function TestDetailPage() {
           </div>
         </form>
       )}
+      {test.status === "draft" && isElement && !hasEdits && (
+        <p className="hint" style={{ marginTop: 16 }}>Open the visual editor on variant B, change something, and mark at least one goal. Then come back and start the test.</p>
+      )}
       {test.status === "draft" && variants.length >= 2 && (
         <p style={{ marginTop: 16 }}>
-          <button className="btn" disabled={busy} onClick={() => act("start", undefined, "The test is live.", "Could not start the test.")}><Icon name="play" />Start test</button>
+          <button className="btn" disabled={busy || (isElement && !hasEdits)} onClick={() => act("start", undefined, "The test is live.", "Could not start the test.")}><Icon name="play" />Start test</button>
         </p>
       )}
 
@@ -173,6 +204,7 @@ export function TestDetailPage() {
           <DecisionPanel
             key={stats?.latest?.winnerKey ?? "no-recommendation"} // re-initialise the default choice once the recommendation arrives
             testId={test.id}
+            testType={test.type}
             variants={variants}
             recommendedKey={stats?.latest?.winnerKey ?? null}
             onDone={() => { setNotice("Decision applied. The test is archived."); load(); }}
