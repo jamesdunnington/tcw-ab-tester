@@ -98,3 +98,13 @@ Keep them additive.
 - UI work: use the `ui-ux-pro-max` skill; verify in a browser at desktop and 375px, light and dark. The dashboard checks caught a real bug (wrong default decision) that typechecking could not.
 - Test statistics against textbook reference values, not against the implementation itself.
 - Site secrets are encrypted, not hashed (HMAC verification needs the raw secret). The browser only ever knows the public site key; the API resolves the site UUID server-side. See README "Why some things are built the way they are".
+
+## End-of-phase routine (do this automatically every phase)
+
+When a phase is finished, before starting the next one:
+
+1. Run `npm run ci:local` and confirm the latest GitHub CI run is green.
+2. Update this file: the "What exists" table, "Not built yet", "Phase N+1 starting points", the test count, and any new environment quirks or decisions learned during the phase.
+3. Update the status section of `README.md` if it changed.
+4. Commit and push (`docs: handoff for Phase N+1`).
+5. Tell the user the phase is done and **offer the choice**: continue in this chat, or open a fresh chat and start it with "Read docs/HANDOFF.md and docs/PLAN.md, then start Phase N+1." Recommend a fresh chat when the conversation is long, since all state lives in git.
