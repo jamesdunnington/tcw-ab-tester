@@ -7,6 +7,8 @@ export interface PageviewRow {
   maxScrollPct: string | number;
   clicked: boolean;
   rageClicks: number;
+  sectionsSeen?: number;
+  sectionsTotal?: number;
 }
 
 export interface VariantRow {
@@ -47,6 +49,8 @@ export function buildVariantData(
             hovered: hoveredSessions.has(r.sessionId),
             clicked: r.clicked,
             rageClicks: r.rageClicks,
+            sectionsSeen: r.sectionsSeen ?? 0,
+            sectionsTotal: r.sectionsTotal ?? 0,
           },
           weights,
           wordCount,

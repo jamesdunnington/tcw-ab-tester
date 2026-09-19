@@ -12,7 +12,7 @@ function sample(n: number, mean: number, spread: number, seed: number): number[]
 describe("engagement score", () => {
   it("presets each sum to exactly 100", () => {
     for (const w of Object.values(ENGAGEMENT_PRESETS)) {
-      expect(w.activeTime + w.scrollDepth + w.hover + w.click).toBe(100);
+      expect(w.activeTime + w.scrollDepth + w.sections + w.hover + w.click).toBe(100);
     }
   });
   it("a quick bounce scores 0", () => {

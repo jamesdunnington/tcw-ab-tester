@@ -19,6 +19,9 @@ export const EDITOR_TOKEN_TTL_SECONDS = 300;
 export const EDITOR_SESSION_MAX_SECONDS = 8 * 3600;
 const DOMAIN = "tcwab-editor\n";
 
+/** "editor" opens the visual editor; "heatmap" opens the read-only heatmap overlay. Tokens minted before kinds existed have none and mean "editor". */
+export type EditorTokenKind = "editor" | "heatmap";
+
 export interface EditorTokenPayload {
   /** Public site key the token was minted for. */
   sk: string;
@@ -30,6 +33,8 @@ export interface EditorTokenPayload {
   exp: number;
   /** When the editing session first started; renewals keep it so the session cap can't be dodged. */
   iat?: number;
+  /** What the token opens; absent means "editor". A heatmap token cannot write ops and an editor token cannot read heat data. */
+  k?: EditorTokenKind;
   /** Random id; lets the hub trace a token, not a replay guard (TTL is the guard). */
   n: string;
 }
@@ -43,7 +48,7 @@ function mac(secret: string, body: string): string {
 }
 
 export function signEditorToken(
-  input: { siteKey: string; testId: string; variantKey: string; secret: string; iat?: number },
+  input: { siteKey: string; testId: string; variantKey: string; secret: string; iat?: number; kind?: EditorTokenKind },
   now: number = Math.floor(Date.now() / 1000),
 ): string {
   const payload: EditorTokenPayload = {
@@ -52,13 +57,14 @@ export function signEditorToken(
     v: input.variantKey,
     exp: now + EDITOR_TOKEN_TTL_SECONDS,
     iat: input.iat ?? now,
+    ...(input.kind && input.kind !== "editor" ? { k: input.kind } : {}),
     n: randomUUID(),
   };
   const body = b64url(JSON.stringify(payload));
   return `${body}.${mac(input.secret, body)}`;
 }
 
-export type EditorTokenFailure = "malformed" | "bad_signature" | "expired" | "wrong_site";
+export type EditorTokenFailure = "malformed" | "bad_signature" | "expired" | "wrong_site" | "wrong_kind";
 
 export type EditorTokenResult = { ok: true; payload: EditorTokenPayload } | { ok: false; reason: EditorTokenFailure };
 
@@ -67,6 +73,7 @@ export function verifyEditorToken(
   secret: string,
   expectedSiteKey: string,
   now: number = Math.floor(Date.now() / 1000),
+  kind: EditorTokenKind | "any" = "editor",
 ): EditorTokenResult {
   const parts = token.split(".");
   if (parts.length !== 2 || !/^[0-9a-f]{64}$/.test(parts[1])) return { ok: false, reason: "malformed" };
@@ -85,6 +92,7 @@ export function verifyEditorToken(
   if (typeof payload.exp !== "number" || typeof payload.sk !== "string") return { ok: false, reason: "malformed" };
   if (payload.sk !== expectedSiteKey) return { ok: false, reason: "wrong_site" };
   if (now > payload.exp) return { ok: false, reason: "expired" };
+  if (kind !== "any" && (payload.k ?? "editor") !== kind) return { ok: false, reason: "wrong_kind" };
   return { ok: true, payload };
 }
 
@@ -99,10 +107,10 @@ export function renewEditorToken(
   expectedSiteKey: string,
   now: number = Math.floor(Date.now() / 1000),
 ): { ok: true; token: string; payload: EditorTokenPayload } | { ok: false; reason: EditorTokenFailure | "session_too_long" } {
-  const v = verifyEditorToken(token, secret, expectedSiteKey, now);
+  const v = verifyEditorToken(token, secret, expectedSiteKey, now, "any");
   if (!v.ok) return v;
   const iat = v.payload.iat ?? v.payload.exp - EDITOR_TOKEN_TTL_SECONDS;
   if (now - iat > EDITOR_SESSION_MAX_SECONDS) return { ok: false, reason: "session_too_long" };
-  const next = signEditorToken({ siteKey: v.payload.sk, testId: v.payload.t, variantKey: v.payload.v, secret, iat }, now);
+  const next = signEditorToken({ siteKey: v.payload.sk, testId: v.payload.t, variantKey: v.payload.v, secret, iat, kind: v.payload.k }, now);
   return { ok: true, token: next, payload: JSON.parse(Buffer.from(next.split(".")[0], "base64url").toString("utf8")) };
 }

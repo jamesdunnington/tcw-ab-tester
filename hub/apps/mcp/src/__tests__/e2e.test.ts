@@ -24,7 +24,8 @@ import { eq } from "drizzle-orm";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import * as schema from "@tcw/db";
-import { configureCore, encryptSecret, decryptSecret, hashPassword } from "@tcw/core";
+import { configureCore, createHeatmapLink, encryptSecret, decryptSecret, hashPassword } from "@tcw/core";
+import { verifyEditorToken } from "@tcw/shared";
 import { createApp } from "../app.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -123,6 +124,20 @@ beforeAll(async () => {
     { siteId: site.id, testId: test.id, variantId: b.id, visitorId: crypto.randomUUID(), sessionId: crypto.randomUUID(), device: "desktop", type: "hover", url: "/", data: { goal: "buy", durationMs: 1200 }, ts: new Date() },
   ]);
 
+  // Heat aggregates as the worker would have written them (desktop + mobile on B, desktop on A).
+  const heat = (variantId: string, device: string, layer: string, selector: string, cellX: number, cellY: number, count: number, weight = count) => ({ testId: test.id, variantId, device, layer, selector, cellX, cellY, count, weight: String(weight) });
+  await db.insert(schema.heatBins).values([
+    heat(b.id, "desktop", "click", "#cta", 4, 5, 12),
+    heat(b.id, "desktop", "click", "#cta", 8, 1, 3),
+    heat(b.id, "mobile", "click", "#cta", 4, 5, 5),
+    heat(a.id, "desktop", "click", "#cta", 4, 5, 2),
+    heat(a.id, "desktop", "dead", "p.intro", 1, 1, 4),
+    heat(b.id, "desktop", "rage", "#cta", 4, 5, 2),
+    heat(b.id, "desktop", "hover", "#cta", 0, 0, 4, 10),
+    heat(b.id, "desktop", "attention", "h2.pricing", 0, 0, 8, 8),
+    heat(b.id, "desktop", "scroll", "", 0, 10, 6),
+  ]);
+
   hub = createServer();
   const hubPort = await listen(hub);
   base = `http://127.0.0.1:${hubPort}`;
@@ -218,7 +233,7 @@ describe("OAuth flow", () => {
       const { tokens } = await tokenFor(clientId, ["hub:read"]);
       const client = await connect(tokens.access_token);
       const names = (await client.listTools()).tools.map((t) => t.name);
-      expect(names).toEqual(expect.arrayContaining(["list_sites", "list_tests", "get_test", "get_results", "get_analytics", "find_posts", "inspect_page"]));
+      expect(names).toEqual(expect.arrayContaining(["list_sites", "list_tests", "get_test", "get_results", "get_analytics", "get_heatmap", "find_posts", "inspect_page"]));
       expect(names).not.toContain("create_element_test");
       expect(names).not.toContain("apply_winner");
       await client.close();
@@ -245,6 +260,41 @@ describe("OAuth flow", () => {
       expect(results.results).toHaveLength(2);
       expect(results.stats).toContain("No statistics computed yet");
       await client.close();
+    });
+
+    it("lets the AI read heatmap findings, filtered by variant and device", async () => {
+      const { tokens } = await tokenFor(clientId, ["hub:read"]);
+      const client = await connect(tokens.access_token);
+      const all = jsonOf(await client.callTool({ name: "get_heatmap", arguments: { testId: ids.test } }));
+      expect(all.sessions).toBe(20);
+      expect(all.click.total).toBe(22);
+      expect(all.click.top[0]).toMatchObject({ selector: "#cta", count: 22, hotspot: { cellX: 4, cellY: 5 } });
+      expect(all.deadClicks.top[0]).toMatchObject({ selector: "p.intro", count: 4 });
+      expect(all.rageClicks.top[0]).toMatchObject({ selector: "#cta", count: 2 });
+      expect(all.hover.top[0]).toMatchObject({ selector: "#cta", avgHoverSeconds: 2.5 });
+      expect(all.attention.top[0]).toMatchObject({ selector: "h2.pricing", sessionsPct: 40 });
+      expect(all.scroll.busiestBand).toEqual({ fromPct: 50, toPct: 55 });
+      expect(all.scroll.reachPct).toHaveLength(10);
+
+      const mobileB = jsonOf(await client.callTool({ name: "get_heatmap", arguments: { testId: ids.test, variantKey: "b", device: "mobile" } }));
+      expect(mobileB.sessions).toBe(4);
+      expect(mobileB.click.total).toBe(5);
+      expect(mobileB.deadClicks.total).toBe(0);
+
+      const bad = await client.callTool({ name: "get_heatmap", arguments: { testId: ids.test, variantKey: "zzz" } });
+      expect(bad.isError).toBe(true);
+      await client.close();
+    });
+
+    it("mints a heatmap link whose token is read-only", async () => {
+      const link = await createHeatmapLink(ids.test, "b");
+      expect(link.ok).toBe(true);
+      if (!link.ok) return;
+      const token = new URL(link.data.url).searchParams.get("tcwab_heatmap") as string;
+      expect(verifyEditorToken(token, "shh", "sk_test", undefined, "heatmap")).toMatchObject({ ok: true, payload: { t: ids.test, v: "b", k: "heatmap" } });
+      expect(verifyEditorToken(token, "shh", "sk_test")).toEqual({ ok: false, reason: "wrong_kind" });
+      // A page test's variant b opens its own post; the seeded variant has none, so it falls back to the original page.
+      expect(link.data.url).toContain("/home/");
     });
 
     it("inspects a page and verifies selectors, never returning script content", async () => {

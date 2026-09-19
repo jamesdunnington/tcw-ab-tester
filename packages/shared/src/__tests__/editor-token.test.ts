@@ -92,3 +92,22 @@ describe("renewEditorToken", () => {
     expect(now - NOW).toBeGreaterThan(EDITOR_SESSION_MAX_SECONDS);
   });
 });
+
+describe("token kinds", () => {
+  it("an editor token is rejected where a heatmap token is required, and vice versa", () => {
+    const editor = signEditorToken(base, NOW);
+    const heat = signEditorToken({ ...base, kind: "heatmap" }, NOW);
+    expect(verifyEditorToken(editor, secret, siteKey, NOW, "editor").ok).toBe(true);
+    expect(verifyEditorToken(editor, secret, siteKey, NOW, "heatmap")).toEqual({ ok: false, reason: "wrong_kind" });
+    expect(verifyEditorToken(heat, secret, siteKey, NOW, "heatmap").ok).toBe(true);
+    // The default is "editor", so a heatmap token can never write ops by accident.
+    expect(verifyEditorToken(heat, secret, siteKey, NOW)).toEqual({ ok: false, reason: "wrong_kind" });
+    expect(verifyEditorToken(heat, secret, siteKey, NOW, "any").ok).toBe(true);
+  });
+
+  it("renewal keeps the kind", () => {
+    const heat = signEditorToken({ ...base, kind: "heatmap" }, NOW);
+    const r = renewEditorToken(heat, secret, siteKey, NOW + 100);
+    expect(r.ok && r.payload.k).toBe("heatmap");
+  });
+});

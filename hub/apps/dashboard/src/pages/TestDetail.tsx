@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { api } from "../lib/api.js";
 import type { StatsResponse, Test, Variant } from "../lib/types.js";
 import { DecisionPanel } from "../components/DecisionPanel.js";
+import { HeatmapPanel } from "../components/HeatmapPanel.js";
 import { Icon } from "../components/Icon.js";
 import { StatsPanel } from "../components/StatsPanel.js";
 import { StatusBadge } from "../components/StatusBadge.js";
@@ -198,6 +199,8 @@ export function TestDetailPage() {
           <StatsPanel stats={stats} variants={variants} confidenceThreshold={threshold} />
         </>
       )}
+
+      {test.status !== "draft" && test.status !== "qa" && <HeatmapPanel testId={test.id} variants={variants} />}
 
       {decidable && (
         <div style={{ marginTop: 24 }}>

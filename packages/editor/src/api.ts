@@ -21,7 +21,7 @@ export class EditorApi {
     private fetcher: typeof fetch = (...a) => fetch(...a),
   ) {}
 
-  private async call<T>(method: string, path: string, body?: unknown): Promise<T> {
+  async call<T>(method: string, path: string, body?: unknown): Promise<T> {
     const res = await this.fetcher(this.cfg.hubUrl + path, {
       method,
       headers: { authorization: `Bearer ${this.cfg.token}`, "content-type": "application/json" },

@@ -20,7 +20,7 @@ function baseEvent(overrides: Partial<QueuedTrackerEventInput>): QueuedTrackerEv
 describe("deriveIncrements", () => {
   it("heartbeat: passes through a normal deltaMs", () => {
     const result = deriveIncrements(baseEvent({ type: "heartbeat", data: { deltaMs: 4200 } }));
-    expect(result).toEqual({ activeMs: 4200, maxScrollPct: 0, clicked: false, rageClicks: 0 });
+    expect(result).toEqual({ activeMs: 4200, maxScrollPct: 0, clicked: false, rageClicks: 0, sectionsSeen: 0, sectionsTotal: 0 });
   });
 
   it("heartbeat: clamps an implausibly large deltaMs (defends against a hung tab or clock skew)", () => {
@@ -58,8 +58,17 @@ describe("deriveIncrements", () => {
         maxScrollPct: 0,
         clicked: false,
         rageClicks: 0,
+        sectionsSeen: 0,
+        sectionsTotal: 0,
       });
     }
+  });
+
+  it("section_view: counts one section seen and carries how many were observed", () => {
+    const r = deriveIncrements(baseEvent({ type: "section_view", data: { sel: "h2", ms: 1000, total: 12 } }));
+    expect(r).toMatchObject({ sectionsSeen: 1, sectionsTotal: 12, clicked: false });
+    expect(deriveIncrements(baseEvent({ type: "section_view", data: { total: 9999 } })).sectionsTotal).toBe(100);
+    expect(deriveIncrements(baseEvent({ type: "section_view" })).sectionsTotal).toBe(0);
   });
 });
 

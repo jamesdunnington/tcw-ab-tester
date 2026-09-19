@@ -8,6 +8,7 @@
  */
 
 import type { TcwabActiveContext } from "./runtime-inline.js";
+import { buildSelector } from "../../editor/src/selector.js";
 
 type TrackerEventType =
   | "pageview"
@@ -17,7 +18,8 @@ type TrackerEventType =
   | "hover"
   | "click"
   | "rage_click"
-  | "visibility_end";
+  | "visibility_end"
+  | "section_view";
 
 interface QueuedEvent {
   testId: string;
@@ -38,6 +40,29 @@ const RAGE_CLICK_WINDOW_MS = 1000;
 const RAGE_CLICK_THRESHOLD = 3;
 const RAGE_CLICK_RADIUS_PX = 40;
 const FLUSH_INTERVAL_MS = 5000;
+const SECTION_DWELL_MS = 1000;
+const SECTION_MAX_OBSERVED = 40;
+const SECTION_SCAN_DELAY_MS = 1500;
+/** Elements a click is expected to do something on; a click anywhere else is a "dead" click. */
+const INTERACTIVE = "a,button,input,select,textarea,label,summary,[role=button],[role=link],[role=tab],[onclick],[tabindex],[data-tcwab-goal]";
+/** Elements whose hover counts as intent: things you can act on. */
+const HOVERABLE = "a,button,input,select,summary,[role=button],[data-tcwab-goal]";
+const SECTIONS = "h1,h2,h3,section,[data-tcwab-goal]";
+
+/** Where inside the element a pointer landed, as integer percent (0-100), so a map still lines up when the layout reflows. */
+function offsetPct(el: Element, x: number, y: number): { ox: number; oy: number } {
+  const r = el.getBoundingClientRect();
+  const pct = (v: number, size: number) => (size > 0 ? Math.max(0, Math.min(100, Math.round((v / size) * 100))) : 0);
+  return { ox: pct(x - r.left, r.width), oy: pct(y - r.top, r.height) };
+}
+
+function safeSelector(el: Element): string {
+  try {
+    return buildSelector(el).slice(0, 300);
+  } catch {
+    return "";
+  }
+}
 
 function main(): void {
   const rawContexts = window.__TCWAB__;
@@ -95,7 +120,14 @@ function main(): void {
     markActivity();
     const target = e.target as Element | null;
     const goalEl = target?.closest("[data-tcwab-goal]");
-    emit("click", { goal: goalEl?.getAttribute("data-tcwab-goal") ?? null, x: e.clientX, y: e.clientY });
+    const where = target ? { sel: safeSelector(target), ...offsetPct(target, e.clientX, e.clientY) } : {};
+    emit("click", {
+      goal: goalEl?.getAttribute("data-tcwab-goal") ?? null,
+      x: e.clientX,
+      y: e.clientY,
+      ...where,
+      ...(target && !target.closest(INTERACTIVE) ? { dead: true } : {}),
+    });
 
     const now = Date.now();
     recentClicks.push({ x: e.clientX, y: e.clientY, ts: now });
@@ -104,7 +136,7 @@ function main(): void {
       (c) => Math.hypot(c.x - e.clientX, c.y - e.clientY) <= RAGE_CLICK_RADIUS_PX,
     );
     if (cluster.length >= RAGE_CLICK_THRESHOLD) {
-      emit("rage_click", { count: cluster.length });
+      emit("rage_click", { count: cluster.length, ...where });
       recentClicks.length = 0; // one rage-click event per cluster
     }
   }
@@ -113,9 +145,9 @@ function main(): void {
   function setupHoverTracking(): void {
     let hoverEl: Element | null = null;
     let enterAt = 0;
-    const goalOf = (t: EventTarget | null) => (t instanceof Element ? t.closest("[data-tcwab-goal]") : null);
+    const hoverTarget = (t: EventTarget | null) => (t instanceof Element ? t.closest(HOVERABLE) : null);
     document.addEventListener("mouseover", (e) => {
-      const el = goalOf(e.target);
+      const el = hoverTarget(e.target);
       if (el && el !== hoverEl) {
         hoverEl = el;
         enterAt = Date.now();
@@ -126,11 +158,53 @@ function main(): void {
       const to = e.relatedTarget;
       if (to instanceof Node && hoverEl.contains(to)) return; // still inside the goal element
       const durationMs = Date.now() - enterAt;
-      const goal = hoverEl.getAttribute("data-tcwab-goal");
+      const goal = hoverEl.closest("[data-tcwab-goal]")?.getAttribute("data-tcwab-goal") ?? null;
+      const sel = durationMs >= HOVER_MIN_MS ? safeSelector(hoverEl) : "";
       hoverEl = null;
       enterAt = 0;
-      if (durationMs >= HOVER_MIN_MS) emit("hover", { goal, durationMs });
+      if (durationMs >= HOVER_MIN_MS) emit("hover", { goal, durationMs, sel });
     }, true);
+  }
+
+  // Which key sections were actually looked at: >= 50% (or a viewport-filling half) in view for >= 1s, once per element.
+  function setupSectionTracking(): void {
+    if (typeof IntersectionObserver === "undefined") return;
+    const timers = new Map<Element, ReturnType<typeof setTimeout>>();
+    const seen = new Set<Element>();
+    let total = 0;
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const el = entry.target;
+          const visible = entry.isIntersecting && (entry.intersectionRatio >= 0.5 || entry.intersectionRect.height >= window.innerHeight * 0.5);
+          if (visible && !seen.has(el) && !timers.has(el)) {
+            timers.set(
+              el,
+              setTimeout(() => {
+                seen.add(el);
+                timers.delete(el);
+                io.unobserve(el);
+                emit("section_view", { sel: safeSelector(el), ms: SECTION_DWELL_MS, total });
+              }, SECTION_DWELL_MS),
+            );
+          } else if (!visible && timers.has(el)) {
+            clearTimeout(timers.get(el));
+            timers.delete(el);
+          }
+        }
+      },
+      { threshold: [0, 0.5, 1] },
+    );
+    const scan = () => {
+      const found = Array.from(document.querySelectorAll(SECTIONS)).filter((el) => (el as HTMLElement).offsetHeight > 0);
+      const picked = found.slice(0, SECTION_MAX_OBSERVED);
+      total = picked.length;
+      for (const el of picked) io.observe(el);
+    };
+    // Late-rendering themes and builders: look once the page has settled, not at first paint.
+    const start = () => setTimeout(scan, SECTION_SCAN_DELAY_MS);
+    if (document.readyState === "complete") start();
+    else window.addEventListener("load", start);
   }
 
   function flush(final: boolean): void {
@@ -161,6 +235,7 @@ function main(): void {
   ["mousemove", "keydown", "touchstart"].forEach((evt) => window.addEventListener(evt, markActivity, { passive: true }));
   window.addEventListener("click", onClick, true);
   setupHoverTracking();
+  setupSectionTracking();
 
   emit("pageview");
   onScroll(); // capture initial scroll depth (e.g. anchor-linked loads)

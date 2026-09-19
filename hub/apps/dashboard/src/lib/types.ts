@@ -114,3 +114,29 @@ export interface StatsResponse {
     decidedAt: string;
   };
 }
+
+export interface HeatTopElement {
+  selector: string;
+  count: number;
+  sharePct: number;
+  hotspot?: { cellX: number; cellY: number };
+  avgHoverSeconds?: number;
+  sessionsPct?: number;
+}
+
+/** GET /api/tests/:id/heatmap (see getHeatmap in @tcw/core). */
+export interface HeatmapResponse {
+  variants: Array<{ key: string; label: string; isControl: boolean }>;
+  sessions: number;
+  click: { total: number; top: HeatTopElement[] };
+  hover: { total: number; top: HeatTopElement[] };
+  attention: { total: number; top: HeatTopElement[] };
+  deadClicks: { total: number; top: HeatTopElement[] };
+  rageClicks: { total: number; top: HeatTopElement[] };
+  scroll: {
+    stops: Array<{ fromPct: number; toPct: number; stops: number; sharePct: number }>;
+    busiestBand: { fromPct: number; toPct: number } | null;
+    reachPct: Array<{ depthPct: number; sessionsPct: number }>;
+    biggestDropAtPct: number | null;
+  };
+}

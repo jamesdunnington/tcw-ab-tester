@@ -9,8 +9,9 @@ COPY packages/stats/package.json packages/stats/package.json
 COPY packages/core/package.json packages/core/package.json
 COPY packages/tracker/package.json packages/tracker/package.json
 COPY packages/editor/package.json packages/editor/package.json
+COPY packages/heatmap/package.json packages/heatmap/package.json
 COPY hub/apps/api/package.json hub/apps/api/package.json
-RUN npm ci --workspace=@tcw/shared --workspace=@tcw/db --workspace=@tcw/stats --workspace=@tcw/core --workspace=@tcw/editor --workspace=@tcw/tracker --workspace=@tcw/api --include-workspace-root
+RUN npm ci --workspace=@tcw/shared --workspace=@tcw/db --workspace=@tcw/stats --workspace=@tcw/core --workspace=@tcw/editor --workspace=@tcw/heatmap --workspace=@tcw/tracker --workspace=@tcw/api --include-workspace-root
 
 FROM base AS build
 COPY --from=deps /app/node_modules ./node_modules
@@ -22,6 +23,7 @@ COPY packages/stats packages/stats
 COPY packages/core packages/core
 COPY packages/tracker packages/tracker
 COPY packages/editor packages/editor
+COPY packages/heatmap packages/heatmap
 COPY hub/apps/api hub/apps/api
 RUN npm run build -w @tcw/shared \
  && npm run build -w @tcw/db \
@@ -29,6 +31,7 @@ RUN npm run build -w @tcw/shared \
  && npm run build -w @tcw/core \
  && npm run tracker:build \
  && npm run build -w @tcw/editor \
+ && npm run build -w @tcw/heatmap \
  && npm run build -w @tcw/api
 
 FROM base AS runtime

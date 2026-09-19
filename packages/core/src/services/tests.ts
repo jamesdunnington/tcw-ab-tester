@@ -160,3 +160,23 @@ export async function createEditorLink(testId: string, variantKey: string): Prom
   url.searchParams.set("tcwab_editor", token);
   return ok({ url: url.toString() });
 }
+
+/**
+ * The signed URL that opens the read-only heatmap overlay on the live page for one variant. Page tests
+ * open the variant's own post (its DOM is what visitors saw); element tests always open the original page.
+ */
+export async function createHeatmapLink(testId: string, variantKey = "a"): Promise<ServiceResult<{ url: string }>> {
+  const test = await testOr404(testId);
+  if (!test) return fail(404, "test_not_found");
+  const db = getDb();
+  const [variant] = await db.select().from(variants).where(and(eq(variants.testId, testId), eq(variants.key, variantKey))).limit(1);
+  if (!variant) return fail(404, "variant_not_found");
+  const site = await siteOr404(test.siteId);
+  if (!site) return fail(404, "site_not_found");
+
+  const token = signEditorToken({ siteKey: site.siteKey, testId: test.id, variantKey: variant.key, secret: decryptSecret(site.secretEncrypted), kind: "heatmap" });
+  const target = test.type === "page" && !variant.isControl && variant.previewUrl ? variant.previewUrl : test.wpPermalink;
+  const url = new URL(target);
+  url.searchParams.set("tcwab_heatmap", token);
+  return ok({ url: url.toString() });
+}

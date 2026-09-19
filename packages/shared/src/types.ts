@@ -80,6 +80,7 @@ export type TrackerEventType =
   | "hover"
   | "click"
   | "rage_click"
+  | "section_view"
   | "visibility_end";
 
 /**

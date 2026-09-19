@@ -48,7 +48,9 @@ export const trackerEventTypeEnum = pgEnum("tracker_event_type", [
   "click",
   "rage_click",
   "visibility_end",
+  "section_view",
 ]);
+export const heatLayerEnum = pgEnum("heat_layer", ["click", "hover", "scroll", "attention", "rage", "dead"]);
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -167,6 +169,9 @@ export const pageviews = pgTable("pageviews", {
   maxScrollPct: numeric("max_scroll_pct", { precision: 5, scale: 2 }).notNull().default("0"),
   clicked: boolean("clicked").notNull().default(false),
   rageClicks: integer("rage_clicks").notNull().default(0),
+  /** Key sections seen for >= 1s (section_view events) and how many the tracker observed; 0 total = no section data (older tracker). */
+  sectionsSeen: integer("sections_seen").notNull().default(0),
+  sectionsTotal: integer("sections_total").notNull().default(0),
   /** Computed once packages/stats lands (phase 2). Null in phase 1. */
   engagementScore: numeric("engagement_score", { precision: 5, scale: 2 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -174,6 +179,28 @@ export const pageviews = pgTable("pageviews", {
 }, (t) => ({
   testVariantIdx: index("pageviews_test_variant_idx").on(t.testId, t.variantId),
   sessionTestIdx: uniqueIndex("pageviews_session_test_idx").on(t.sessionId, t.testId),
+}));
+
+/**
+ * Heatmap aggregates (docs/PLAN.md sections 7 and 8), kept forever unlike raw events. One row per
+ * (test, variant, device, layer, element selector, grid cell); the worker upserts into it.
+ * click/rage/dead: cell = offset inside the element on a 10x10 grid. hover/attention: cell 0,0, the
+ * element as a whole. scroll: selector "", cell_y = 5% band of page height.
+ */
+export const heatBins = pgTable("heat_bins", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  testId: uuid("test_id").notNull().references(() => tests.id, { onDelete: "cascade" }),
+  variantId: uuid("variant_id").notNull().references(() => variants.id, { onDelete: "cascade" }),
+  device: deviceEnum("device").notNull(),
+  layer: heatLayerEnum("layer").notNull(),
+  selector: text("selector").notNull(),
+  cellX: integer("cell_x").notNull().default(0),
+  cellY: integer("cell_y").notNull().default(0),
+  count: integer("count").notNull().default(0),
+  /** hover: seconds hovered; attention: seconds in view; others: same as count. */
+  weight: numeric("weight", { precision: 12, scale: 2 }).notNull().default("0"),
+}, (t) => ({
+  binIdx: uniqueIndex("heat_bins_bin_idx").on(t.testId, t.variantId, t.device, t.layer, t.selector, t.cellX, t.cellY),
 }));
 
 export const auditLog = pgTable("audit_log", {

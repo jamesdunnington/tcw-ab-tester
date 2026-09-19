@@ -12,8 +12,11 @@
 	handle /runtime-inline.js {
 		reverse_proxy api:4000
 	}
-	# The visual editor: bundle loaded by the WP plugin, and its token-authenticated API.
+	# The visual editor and heatmap overlay: bundles loaded by the WP plugin, and their token-authenticated API.
 	handle /editor.js {
+		reverse_proxy api:4000
+	}
+	handle /heatmap.js {
 		reverse_proxy api:4000
 	}
 	handle /editor/* {

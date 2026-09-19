@@ -204,3 +204,19 @@ dialog::backdrop { background: rgb(2 6 23 / 60%); }
 
 .btn svg, .back-link svg { width: 18px; height: 18px; flex: none; }
 .back-link { white-space: nowrap; }
+
+/* Selects share the input look */
+.field select, .select {
+  min-height: 44px; padding: var(--space-2) var(--space-3); font: inherit; color: var(--text);
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+}
+
+/* Heatmap panel */
+.heat-toolbar { display: flex; gap: var(--space-3); align-items: flex-end; flex-wrap: wrap; margin-bottom: var(--space-3); }
+.heat-toolbar .field { margin-bottom: 0; flex: 0 1 200px; }
+.heat-layers { display: flex; gap: var(--space-1); flex-wrap: wrap; margin-bottom: var(--space-3); }
+.heat-layers button { min-height: 44px; padding: 0 var(--space-3); border: 1px solid var(--border); background: var(--surface-2); color: var(--text); border-radius: var(--radius); cursor: pointer; font: inherit; }
+.heat-layers button[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+.selector-cell { font-family: var(--font-mono); font-size: 0.8125rem; word-break: break-all; max-width: 420px; }
+.meter { display: inline-block; vertical-align: middle; width: 120px; height: 8px; background: var(--surface-2); border-radius: 4px; overflow: hidden; margin-right: var(--space-2); }
+.meter > span { display: block; height: 100%; background: var(--primary); }

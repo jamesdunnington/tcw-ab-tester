@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { events, pageviews, statsSnapshots, tests, variants } from "@tcw/db";
 import { decideWinner, type WinnerDecision } from "@tcw/stats";
 import { db } from "./db.js";
@@ -18,7 +18,8 @@ export async function recomputeTest(testId: string, now = new Date()): Promise<W
   const hoverRows = await db
     .selectDistinct({ sessionId: events.sessionId })
     .from(events)
-    .where(and(eq(events.testId, testId), eq(events.type, "hover")));
+    // Hover is tracked on any interactive element (heatmap layer); an element test's score counts only goal hovers, as before.
+    .where(and(eq(events.testId, testId), eq(events.type, "hover"), test.type === "element" ? sql`${events.data}->>'goal' is not null` : undefined));
 
   const data = buildVariantData(variantRows, pageviewRows, new Set(hoverRows.map((r) => r.sessionId)), test.wordCount, test.wpPostType);
 

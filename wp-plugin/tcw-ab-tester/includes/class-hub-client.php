@@ -79,7 +79,7 @@ class TCWAB_Hub_Client {
 	 *
 	 * @return array{sk:string,t:string,v:string,exp:int,n:string}|null Payload when valid, null otherwise.
 	 */
-	public function verify_editor_token(string $token): ?array {
+	public function verify_editor_token(string $token, string $kind = 'editor'): ?array {
 		if (!$this->is_configured() || !preg_match('/^([A-Za-z0-9_-]+)\.([0-9a-f]{64})$/', $token, $m)) {
 			return null;
 		}
@@ -93,6 +93,11 @@ class TCWAB_Hub_Client {
 			return null;
 		}
 		if ($payload['sk'] !== $this->get_site_key() || time() > (int) $payload['exp']) {
+			return null;
+		}
+		// An editor token cannot open the heatmap and a heatmap token cannot open the editor. Tokens minted
+		// before kinds existed carry no 'k' and mean "editor".
+		if (($payload['k'] ?? 'editor') !== $kind) {
 			return null;
 		}
 		return $payload;

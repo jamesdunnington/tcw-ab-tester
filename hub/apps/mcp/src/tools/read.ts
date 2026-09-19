@@ -3,7 +3,7 @@ import { and, eq, type SQL } from "drizzle-orm";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { changeOpsSchema } from "@tcw/shared";
 import { sites, tests, variants } from "@tcw/db";
-import { findPosts, getAnalytics, getResults, getStats, inspectPage } from "@tcw/core";
+import { findPosts, getAnalytics, getHeatmap, getResults, getStats, inspectPage } from "@tcw/core";
 import { getDb } from "@tcw/core";
 import { env } from "../env.js";
 import { contextOf, fromService, problem, requireScope, text } from "./common.js";
@@ -95,6 +95,22 @@ export function registerReadTools(server: McpServer): void {
       const denied = requireScope(contextOf(extra.authInfo), "hub:read");
       if (denied) return denied;
       return fromService(await getAnalytics(testId));
+    },
+  );
+
+  server.registerTool(
+    "get_heatmap",
+    {
+      title: "Get the heatmap findings",
+      description:
+        "Where visitors click, hover and pay attention on the tested page, as ranked lists of elements (CSS selectors) rather than a picture: most-clicked elements with the hottest spot inside each, most-hovered, key sections actually seen (share of sessions), dead clicks (clicks on things that are not links or buttons, so people expect them to work), rage clicks (frustration), where scrolling pauses, and the scroll drop-off curve with the depth where most people leave. Optionally filter to one variant and one device. Use it to explain why a variant won or lost and to pick the next element to test. Descriptive only: significance comes from get_results.",
+      inputSchema: { testId: z.string().uuid(), variantKey: z.string().min(1).max(32).optional(), device: z.enum(["desktop", "tablet", "mobile"]).optional() },
+      annotations: READ,
+    },
+    async ({ testId, variantKey, device }, extra) => {
+      const denied = requireScope(contextOf(extra.authInfo), "hub:read");
+      if (denied) return denied;
+      return fromService(await getHeatmap(testId, { variantKey, device }));
     },
   );
 

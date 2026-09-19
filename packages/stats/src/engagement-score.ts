@@ -1,18 +1,20 @@
 /**
- * Engagement Score (0-100) per session, from the signals the tracker
- * actually collects today: active time, scroll depth, hover intent, click.
+ * Engagement Score (0-100) per session (docs/PLAN.md section 5): active time,
+ * scroll depth, key sections seen for >= 1s, hover intent, click.
  *
- * docs/PLAN.md section 5 specifies a fifth component (share of key sections
- * seen for >= 1s). That needs per-section visibility tracking, which arrives
- * with the heatmap work in phase 4, so it is intentionally not scored yet.
- * The presets below are the plan's weights with that component removed and
- * the remainder rescaled to 100, keeping the plan's relative proportions.
+ * The plan's five weights are used as written. A session whose tracker sent no
+ * section data (sectionsTotal = 0: an older cached tracker, or a page with no
+ * headings) is scored on the other four, rescaled to 100 - the same relative
+ * proportions the plan gives them - so it is neither punished for missing
+ * data nor able to outscore a session that had it.
  * Weights are overridable per test.
  */
 
 export interface EngagementWeights {
   activeTime: number;
   scrollDepth: number;
+  /** Share of the page's key sections seen for >= 1s. */
+  sections: number;
   hover: number;
   click: number;
 }
@@ -20,9 +22,9 @@ export interface EngagementWeights {
 export type EngagementPreset = "cta" | "content" | "landing";
 
 export const ENGAGEMENT_PRESETS: Record<EngagementPreset, EngagementWeights> = {
-  cta: { activeTime: 17, scrollDepth: 11, hover: 17, click: 55 },
-  content: { activeTime: 44, scrollDepth: 31, hover: 6, click: 19 },
-  landing: { activeTime: 29, scrollDepth: 24, hover: 12, click: 35 },
+  cta: { activeTime: 15, scrollDepth: 10, sections: 10, hover: 15, click: 50 },
+  content: { activeTime: 35, scrollDepth: 25, sections: 20, hover: 5, click: 15 },
+  landing: { activeTime: 25, scrollDepth: 20, sections: 15, hover: 10, click: 30 },
 };
 
 export interface SessionSignals {
@@ -33,6 +35,9 @@ export interface SessionSignals {
   hovered: boolean;
   clicked: boolean;
   rageClicks: number;
+  /** Key sections seen, and how many the tracker observed. Omitted or 0 total = no section data. */
+  sectionsSeen?: number;
+  sectionsTotal?: number;
 }
 
 const WORDS_PER_MINUTE = 230;
@@ -55,11 +60,20 @@ export function computeEngagementScore(signals: SessionSignals, weights: Engagem
   const timeRatio = Math.min(1, signals.activeMs / expectedReadMs(wordCount));
   const scrollRatio = Math.min(1, Math.max(0, signals.maxScrollPct / 100));
 
-  const raw =
+  const total = signals.sectionsTotal ?? 0;
+  const hasSections = total > 0;
+  const sectionRatio = hasSections ? Math.min(1, Math.max(0, (signals.sectionsSeen ?? 0) / total)) : 0;
+
+  let raw =
     weights.activeTime * timeRatio +
     weights.scrollDepth * scrollRatio +
+    weights.sections * sectionRatio +
     weights.hover * (signals.hovered ? 1 : 0) +
     weights.click * (signals.clicked ? 1 : 0);
+  if (!hasSections) {
+    const rest = 100 - weights.sections;
+    raw = rest > 0 ? (raw * 100) / rest : 0;
+  }
 
   return Math.max(0, Math.min(100, raw - RAGE_CLICK_PENALTY * signals.rageClicks));
 }

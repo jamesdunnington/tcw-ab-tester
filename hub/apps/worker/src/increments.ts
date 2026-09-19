@@ -9,40 +9,49 @@ const MAX_HEARTBEAT_DELTA_MS = 10_000;
  * __tests__/process-event.test.ts) without needing DATABASE_URL/REDIS_URL
  * set up just to import it.
  */
-export function deriveIncrements(
-  event: QueuedTrackerEventInput,
-  opts: { goalOnly?: boolean } = {},
-): {
+export interface Increments {
   activeMs: number;
   maxScrollPct: number;
   clicked: boolean;
   rageClicks: number;
-} {
+  /** section_view: one more key section seen; sectionsTotal is how many the tracker observed (max wins). */
+  sectionsSeen: number;
+  sectionsTotal: number;
+}
+
+const NONE: Increments = { activeMs: 0, maxScrollPct: 0, clicked: false, rageClicks: 0, sectionsSeen: 0, sectionsTotal: 0 };
+
+export function deriveIncrements(event: QueuedTrackerEventInput, opts: { goalOnly?: boolean } = {}): Increments {
   const data = event.data ?? {};
 
   if (event.type === "heartbeat") {
     const raw = typeof data.deltaMs === "number" ? data.deltaMs : 5000;
     const activeMs = Math.max(0, Math.min(raw, MAX_HEARTBEAT_DELTA_MS));
-    return { activeMs, maxScrollPct: 0, clicked: false, rageClicks: 0 };
+    return { ...NONE, activeMs };
   }
 
   if (event.type === "scroll_depth") {
     const pct = typeof data.pct === "number" ? Math.max(0, Math.min(100, data.pct)) : 0;
-    return { activeMs: 0, maxScrollPct: pct, clicked: false, rageClicks: 0 };
+    return { ...NONE, maxScrollPct: pct };
   }
 
   if (event.type === "click") {
     // Element tests convert only on a goal-flagged element; page tests count any click.
     const clicked = opts.goalOnly ? typeof data.goal === "string" : true;
-    return { activeMs: 0, maxScrollPct: 0, clicked, rageClicks: 0 };
+    return { ...NONE, clicked };
   }
 
   if (event.type === "rage_click") {
-    return { activeMs: 0, maxScrollPct: 0, clicked: false, rageClicks: 1 };
+    return { ...NONE, rageClicks: 1 };
   }
 
-  // pageview, scroll_stop, hover, visibility_end: no rollup increment in
-  // phase 1 (heatmap consumers land in phase 4) — still ensure the
-  // pageviews row exists via the zero-delta upsert in process-event.ts.
-  return { activeMs: 0, maxScrollPct: 0, clicked: false, rageClicks: 0 };
+  if (event.type === "section_view") {
+    const total = typeof data.total === "number" ? Math.max(0, Math.min(100, Math.floor(data.total))) : 0;
+    return { ...NONE, sectionsSeen: 1, sectionsTotal: total };
+  }
+
+  // pageview, scroll_stop, hover, visibility_end: no rollup increment (the heat
+  // bins in heat.ts consume them) - still ensure the pageviews row exists via
+  // the zero-delta upsert in process-event.ts.
+  return { ...NONE };
 }

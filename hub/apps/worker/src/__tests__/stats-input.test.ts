@@ -29,6 +29,11 @@ describe("buildVariantData", () => {
     const rows = [pv("v-a", "bounce", { activeMs: 1000, maxScrollPct: "0" })];
     expect(buildVariantData(variantRows, rows, new Set(), 500, "post")[0].scores).toEqual([0]);
   });
+  it("sessions that saw more key sections score higher than ones that saw none", () => {
+    const rows = [pv("v-a", "saw", { sectionsSeen: 6, sectionsTotal: 6 }), pv("v-a", "missed", { sectionsSeen: 0, sectionsTotal: 6 })];
+    const [saw, missed] = buildVariantData(variantRows, rows, new Set(), 500, "post")[0].scores;
+    expect(saw).toBeGreaterThan(missed);
+  });
   it("returns an empty arm for a variant with no sessions", () => {
     const data = buildVariantData(variantRows, [pv("v-a", "s1")], new Set(), 500, "post");
     expect(data[1]).toMatchObject({ key: "b", sessions: 0, clicks: 0, scores: [] });
