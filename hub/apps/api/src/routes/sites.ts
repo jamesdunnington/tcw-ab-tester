@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { generateSiteCredentials } from "@tcw/shared";
 import { db } from "../db/client.js";
 import { sites } from "@tcw/db";
-import { encryptSecret } from "../lib/crypto.js";
+import { encryptSecret } from "@tcw/core";
 import { requireAuth } from "../lib/session.js";
 
 const createSiteSchema = z.object({

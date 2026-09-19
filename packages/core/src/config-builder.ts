@@ -1,5 +1,5 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
-import { db } from "../db/client.js";
+import { getDb } from "./context.js";
 import { tests, variants } from "@tcw/db";
 import { changeOpsSchema, mergeGoalOps, type ChangeOp } from "@tcw/shared";
 import type { RuntimeConfigPushEntry } from "./wp-client.js";
@@ -10,6 +10,7 @@ import type { RuntimeConfigPushEntry } from "./wp-client.js";
  * fallback (routes/wp.ts) send down to the plugin.
  */
 export async function buildRuntimeConfig(siteId: string): Promise<RuntimeConfigPushEntry[]> {
+  const db = getDb();
   const rows = await db
     .select()
     .from(tests)

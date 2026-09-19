@@ -30,6 +30,11 @@ class TCWAB_REST_API {
 				'callback'            => [$this, 'get_post_info'],
 				'permission_callback' => [$this, 'verify_signature'],
 			]);
+			register_rest_route('tcwab/v1', '/posts', [
+				'methods'             => 'GET',
+				'callback'            => [$this, 'search_posts'],
+				'permission_callback' => [$this, 'verify_signature'],
+			]);
 			register_rest_route('tcwab/v1', '/variants', [
 				'methods'             => 'POST',
 				'callback'            => [$this, 'create_variant'],
@@ -76,6 +81,12 @@ class TCWAB_REST_API {
 			return $result;
 		}
 		return new WP_REST_Response($result, 200);
+	}
+
+	public function search_posts(WP_REST_Request $request) {
+		$search = sanitize_text_field((string) $request->get_param('search'));
+		$limit  = (int) $request->get_param('limit');
+		return new WP_REST_Response(['posts' => $this->variants->search_posts($search, $limit > 0 ? $limit : 10)], 200);
 	}
 
 	public function create_variant(WP_REST_Request $request) {

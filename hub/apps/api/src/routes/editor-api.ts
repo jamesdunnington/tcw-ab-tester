@@ -4,8 +4,7 @@ import { changeOpsSchema, renewEditorToken, verifyEditorToken, type EditorTokenP
 import { z } from "zod";
 import { db } from "../db/client.js";
 import { sites, variants } from "@tcw/db";
-import { decryptSecret } from "../lib/crypto.js";
-import { saveVariantOps } from "../lib/variant-ops.js";
+import { decryptSecret, saveVariantOps } from "@tcw/core";
 
 /**
  * API the visual editor calls from the customer's WordPress origin. There is

@@ -221,3 +221,47 @@ export const statsSnapshots = pgTable("stats_snapshots", {
 }, (t) => ({
   testComputedIdx: index("stats_snapshots_test_computed_idx").on(t.testId, t.computedAt),
 }));
+
+/**
+ * OAuth for the Claude connector (hub/apps/mcp). Additive tables only. Codes and tokens are stored
+ * as SHA-256 hashes: a database leak must not hand out working credentials.
+ */
+export const oauthClients = pgTable("oauth_clients", {
+  clientId: text("client_id").primaryKey(),
+  /** AES-GCM encrypted (same box as site secrets): the SDK compares the secret in plaintext, so it must be recoverable. Null for public (PKCE-only) clients. */
+  clientSecretEncrypted: text("client_secret_encrypted"),
+  /** The RFC 7591 registration document: redirect_uris, client_name, token_endpoint_auth_method ... */
+  metadata: jsonb("metadata").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Single-use authorization codes (10 minutes). Consumed by delete-and-return, so a replay finds nothing. */
+export const oauthCodes = pgTable("oauth_codes", {
+  codeHash: text("code_hash").primaryKey(),
+  clientId: text("client_id").notNull().references(() => oauthClients.clientId, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  redirectUri: text("redirect_uri").notNull(),
+  codeChallenge: text("code_challenge").notNull(),
+  scopes: jsonb("scopes").notNull(),
+  resource: text("resource"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+});
+
+/** Access (about 1 hour) and refresh tokens. A refresh token is single use; reusing one revokes its whole family. */
+export const oauthTokens = pgTable("oauth_tokens", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tokenHash: text("token_hash").notNull(),
+  kind: text("kind").notNull(), // "access" | "refresh"
+  familyId: uuid("family_id").notNull(),
+  clientId: text("client_id").notNull().references(() => oauthClients.clientId, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  scopes: jsonb("scopes").notNull(),
+  resource: text("resource"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  hashIdx: uniqueIndex("oauth_tokens_hash_idx").on(t.tokenHash),
+  familyIdx: index("oauth_tokens_family_idx").on(t.familyId),
+}));

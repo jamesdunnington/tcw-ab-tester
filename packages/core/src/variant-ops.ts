@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import type { ChangeOp } from "@tcw/shared";
-import { db } from "../db/client.js";
+import { getDb } from "./context.js";
 import { sites, tests, variants } from "@tcw/db";
 import { pushRuntimeConfig } from "./wp-client.js";
 import { buildRuntimeConfig } from "./config-builder.js";
@@ -14,6 +14,7 @@ export type SaveOpsResult =
  * token-authenticated editor route so both enforce the same rules.
  */
 export async function saveVariantOps(testId: string, variantKey: string, ops: ChangeOp[]): Promise<SaveOpsResult> {
+  const db = getDb();
   const [test] = await db.select().from(tests).where(eq(tests.id, testId)).limit(1);
   if (!test) return { ok: false, status: 404, error: "test_not_found" };
   if (test.type !== "element") return { ok: false, status: 409, error: "not_an_element_test" };

@@ -70,6 +70,24 @@ services:
       redis: { condition: service_healthy }
       api: { condition: service_started } # api runs migrations on boot; worker needs the schema to exist
 
+  # Claude Desktop connector (remote MCP over Streamable HTTP + OAuth). Its own hostname, see Caddyfile.
+  mcp:
+    build:
+      context: ..
+      dockerfile: hub/apps/mcp/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 4100
+      DATABASE_URL: postgres://${POSTGRES_USER:-tcwab}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-tcwab}
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in hub/.env}
+      SECRET_ENCRYPTION_KEY: ${SECRET_ENCRYPTION_KEY:?set SECRET_ENCRYPTION_KEY in hub/.env}
+      MCP_PUBLIC_URL: https://${MCP_DOMAIN:?set MCP_DOMAIN in hub/.env, e.g. mcptest.yourdomain.com}
+      HUB_PUBLIC_URL: ${HUB_PUBLIC_URL:?set HUB_PUBLIC_URL in hub/.env}
+    depends_on:
+      postgres: { condition: service_healthy }
+      api: { condition: service_started } # api runs migrations on boot; the OAuth tables come from there
+
   dashboard:
     build:
       context: ..
@@ -88,9 +106,11 @@ services:
       - caddy_config:/config
     environment:
       HUB_DOMAIN: ${HUB_DOMAIN:?set HUB_DOMAIN in hub/.env, e.g. ab.yourdomain.com}
+      MCP_DOMAIN: ${MCP_DOMAIN:?set MCP_DOMAIN in hub/.env, e.g. mcptest.yourdomain.com}
     depends_on:
       - api
       - dashboard
+      - mcp
 
 volumes:
   pg_data:

@@ -15,6 +15,13 @@
       "when": 1789820046387,
       "tag": "0001_long_nomad",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789827411073,
+      "tag": "0002_fine_the_spike",
+      "breakpoints": true
     }
   ]
 }

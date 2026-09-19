@@ -8,7 +8,7 @@
     "hub/apps/*"
   ],
   "scripts": {
-    "build": "npm run build -w @tcw/shared && npm run build --workspaces --if-present",
+    "build": "npm run build -w @tcw/shared && npm run build -w @tcw/db && npm run build -w @tcw/stats && npm run build -w @tcw/core && npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "dev:api": "npm run dev -w @tcw/api",

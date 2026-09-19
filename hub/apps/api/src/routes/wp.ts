@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { sites } from "@tcw/db";
 import { verifyWpSignature } from "../lib/hmac-guard.js";
-import { buildRuntimeConfig } from "../lib/config-builder.js";
+import { buildRuntimeConfig } from "@tcw/core";
 
 const heartbeatSchema = z.object({
   wpVersion: z.string().max(40).optional(),

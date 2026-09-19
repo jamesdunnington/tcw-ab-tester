@@ -63,6 +63,7 @@ jobs:
           SESSION_SECRET: ci-placeholder-session-secret-at-least-32-chars
           SECRET_ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000aa
           HUB_PUBLIC_URL: https://ci-placeholder.example.com
+          MCP_DOMAIN: mcp-ci-placeholder.example.com
 
       - name: Validate dev/docker-compose.yml
         run: docker compose -f dev/docker-compose.yml config --quiet

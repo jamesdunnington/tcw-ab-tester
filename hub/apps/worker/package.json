@@ -18,7 +18,7 @@
     "drizzle-orm": "^0.36.1",
     "ioredis": "^5.4.1",
     "pino": "^9.5.0",
-    "zod": "^3.23.8"
+    "zod": "^3.25.0"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",

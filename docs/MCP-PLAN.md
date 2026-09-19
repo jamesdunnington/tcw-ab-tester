@@ -1,5 +1,7 @@
 # Claude Desktop connector (remote MCP) - design
 
+**Status: built** (`hub/apps/mcp`, `packages/core`) and tested end to end with PGlite and the SDK's MCP client. Not yet verified in Claude Desktop itself: that needs the public VPS (build order step 6). Beyond this plan: `get_analytics` (distributions, device split, daily trend, goal clicks and hovers) so Claude can derive findings, and redirect URIs restricted to Claude's callback hosts and loopback. TOTP is not implemented (the hub has none).
+
 Goal: after the plugin is installed on a WordPress site, the owner sets up and
 runs A/B tests by chatting in Claude Desktop (or a Claude Project). Claude talks
 to the hub through a **remote MCP connector**: a Streamable HTTP URL secured

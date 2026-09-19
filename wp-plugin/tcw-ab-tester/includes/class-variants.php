@@ -126,6 +126,36 @@ class TCWAB_Variants {
 		];
 	}
 
+	/**
+	 * Title search over published and draft posts and pages, excluding the plugin's own test copies.
+	 *
+	 * @return array<int, array{id:int,type:string,status:string,title:string,permalink:string}>
+	 */
+	public function search_posts(string $search, int $limit): array {
+		$query = new WP_Query([
+			'post_type'      => ['post', 'page'],
+			'post_status'    => ['publish', 'draft', 'pending', 'private', 'future'],
+			's'              => $search,
+			'posts_per_page' => max(1, min(25, $limit)),
+			'no_found_rows'  => true,
+			'orderby'        => 'relevance',
+		]);
+		$out = [];
+		foreach ($query->posts as $post) {
+			if ($this->is_variant($post->ID)) {
+				continue;
+			}
+			$out[] = [
+				'id'        => $post->ID,
+				'type'      => $post->post_type,
+				'status'    => $post->post_status,
+				'title'     => get_the_title($post),
+				'permalink' => get_permalink($post),
+			];
+		}
+		return $out;
+	}
+
 	/** Marks variant copies in the wp-admin post list so nobody mistakes one for a normal post. */
 	public function add_post_state(array $states, WP_Post $post): array {
 		if ($this->is_variant($post->ID)) {

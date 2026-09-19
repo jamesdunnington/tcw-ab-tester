@@ -4,9 +4,9 @@ import { redis } from "./redis.js";
 import { db } from "../db/client.js";
 import { sites } from "@tcw/db";
 import { eq } from "drizzle-orm";
-import { decryptSecret } from "./crypto.js";
+import { decryptSecret, type SiteRow } from "@tcw/core";
 
-export type SiteRow = typeof sites.$inferSelect;
+export type { SiteRow };
 
 declare module "fastify" {
   interface FastifyRequest {

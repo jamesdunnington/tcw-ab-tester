@@ -1,6 +1,8 @@
 import { signRequest, type ChangeOp } from "@tcw/shared";
 import { decryptSecret } from "./crypto.js";
-import type { SiteRow } from "./hmac-guard.js";
+import type { sites } from "@tcw/db";
+
+export type SiteRow = typeof sites.$inferSelect;
 
 /**
  * Hub -> WordPress signed HTTP client. Mirror of hmac-guard.ts but for the
@@ -22,7 +24,8 @@ export class WpClientError extends Error {
 async function wpRequest<T>(site: SiteRow, method: "GET" | "POST" | "DELETE", path: string, body?: unknown): Promise<T> {
   const secret = decryptSecret(site.secretEncrypted);
   const bodyStr = body === undefined ? "" : JSON.stringify(body);
-  const signed = signRequest({ method, path, body: bodyStr, secret });
+  // The signature covers the path only: WordPress rebuilds it from the route, without the query string.
+  const signed = signRequest({ method, path: path.split("?")[0], body: bodyStr, secret });
 
   const url = new URL(path, normalizeDomain(site.domain)).toString();
   const res = await fetch(url, {
@@ -87,6 +90,19 @@ export interface WpPostInfo {
 /** Fetches canonical post metadata from WP so the hub never has to trust client-supplied post type/permalink. */
 export async function fetchPostInfo(site: SiteRow, wpPostId: number): Promise<WpPostInfo> {
   return wpRequest<WpPostInfo>(site, "GET", `/wp-json/tcwab/v1/posts/${wpPostId}`);
+}
+
+export interface WpPostSummary {
+  id: number;
+  type: "post" | "page";
+  status: string;
+  title: string;
+  permalink: string;
+}
+
+/** Searches a site's posts and pages by title, so a test can be set up from a name instead of a post ID. */
+export async function findPosts(site: SiteRow, search: string, limit = 10): Promise<{ posts: WpPostSummary[] }> {
+  return wpRequest(site, "GET", `/wp-json/tcwab/v1/posts?search=${encodeURIComponent(search)}&limit=${limit}`);
 }
 
 export interface FinalizePayload {
