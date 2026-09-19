@@ -2,7 +2,7 @@
 
 Read this, then `docs/PLAN.md` (the design), then `README.md` (setup and the
 non-obvious design decisions). Repo: https://github.com/jamesdunnington/tcw-ab-tester
-(public, default branch **master**). Phases 1 and 2 are done and pushed.
+(public, default branch **master**). Phases 1 and 2 are done. **Phase 3 is mostly built** (see below); a Claude Desktop connector is designed in `docs/MCP-PLAN.md`. Production hostnames: hub `https://test.thecontentwarrior.work`, MCP `https://mcptest.thecontentwarrior.work`.
 
 ## What exists
 
@@ -16,27 +16,40 @@ non-obvious design decisions). Repo: https://github.com/jamesdunnington/tcw-ab-t
 | Statistics | `packages/stats` | Bayesian + frequentist analysis, Engagement Score, sample size, `decideWinner` gate |
 | Browser runtime | `packages/tracker` | `runtime-inline.ts` (assignment/redirect, inlined by PHP) and `tracker.ts` |
 | WordPress plugin | `wp-plugin/tcw-ab-tester` | connect, duplicate, promote, cleanup, cache purge, archive, SEO guard |
+| Change ops + editor token | `packages/shared` | `change-ops.ts` (typed ops, `mergeGoalOps`), `editor-token.ts` (5-min HMAC token, renewable up to 8h) |
+| Visual editor | `packages/editor` | vanilla TS, Shadow DOM, built to `/editor.js` (5.5KB gz): selector generator, picker, sidebar, undo/redo, live preview, token-authenticated save |
+| Editor API | `hub/apps/api/src/routes/editor-api.ts`, `editor.ts` | `GET/PUT /editor/ops`, `POST /editor/renew` (bearer token); `POST /api/tests/:id/variants/:key/editor-link` |
+| Element tests | `routes/tests.ts` | `POST /api/element-tests`, `PUT /api/tests/:id/variants/:key/ops`; ops ship in the runtime config |
+| Plugin editor bridge | `wp-plugin/.../class-editor-bridge.php` | token + `edit_pages` gate, loads hub `/editor.js`; editor requests skip cache and the A/B split |
 | Compose | `hub/docker-compose.yml` (prod), `dev/docker-compose.yml` (hub + real WP) | validated by CI only, never run locally |
 
 Phase 1 = page/post split tests end to end. Phase 2 = stats, winner gates,
 promote/cleanup/archive, decision UI.
 
-## Not built yet (PLAN.md section 11)
+## Not built yet
 
-- **Phase 3 (next):** visual point-and-click editor, element-level tests (CTA, color, text), goal flags, anti-flicker change-op runtime.
+**Phase 3 remaining (do these next):**
+- Dashboard UI: "Create element test" and "Edit variant" (calls the editor-link endpoint). The API exists, nothing in the UI uses it. Use the `ui-ux-pro-max` skill; verify at desktop + 375px, light + dark.
+- Winner flow for element tests: the winning change set becomes a permanent rule served to everyone with no tracking (PLAN.md section 6, step 5). `TCWAB_Finalizer` and the hub decision route handle page tests only.
+- Tracker binds hover listeners once at startup, so a goal element created later by the change-op observer gets click but not hover tracking.
+- Editor login redirect uses `home_url(add_query_arg([]))`, which may double the path on subfolder WordPress installs.
+- Then the end-of-phase routine below.
+
+**Next feature, requested by the owner: Claude Desktop connector.** Read `docs/MCP-PLAN.md`. Remote MCP over Streamable HTTP with OAuth at mcptest.thecontentwarrior.work; draft freely, confirm going live. Start with the zod bump to >=3.25.
+
 - Phase 4: heatmaps (also unlocks the 5th Engagement Score component, "key sections seen").
 - Phase 5: cross-site library, email notifications, consent-plugin integrations, retention jobs, backups.
-- Small known gaps: guardrail is click-rate only; SEO-plugin index tables are not purged directly on cleanup; only page/post tests can be created (`createPageTestSchema`).
+- Small known gaps: guardrail is click-rate only; SEO-plugin index tables are not purged directly on cleanup; only page/post tests can be created from the dashboard.
 
-## Phase 3 starting points
+## Phase 3 design decisions (already made)
 
-- `tests.type` already has an `"element"` enum value and `variants.change_ops` (jsonb) exists but nothing reads or writes them.
-- The typed **change-operation schema** (PLAN.md section 7) does not exist yet. Put it in `packages/shared`.
-- `runtime-inline.ts` only does bucketing + redirect. Element tests need a DOM change-op applier with anti-flicker (hide only target elements, ~400ms safety timeout, MutationObserver). Budget: inline runtime under 2KB gzipped, tracker under 8KB (`npm run tracker:build` prints both).
-- The tracker already emits hover/click for elements carrying `data-tcwab-goal`.
-- Editor flow (PLAN.md section 7): hub mints a short-lived HMAC token, opens `https://site/page?tcwab_editor=TOKEN`, plugin verifies token AND `edit_pages`, then loads the overlay in a Shadow DOM. There is no `class-editor-bridge.php` yet.
-- Runtime config reaches WordPress as the option `tcwab_runtime_config` (hub pushes it; `class-runtime.php` reads it). `buildRuntimeConfig` in `hub/apps/api/src/lib/config-builder.ts` builds it.
-- Winner flow for element tests differs from page tests: the change set becomes a permanent rule served to everyone (PLAN.md section 6, step 5). `TCWAB_Finalizer` currently handles page tests only.
+- **Ops are a closed, validated set:** text, html, style, attr, hide, goal. No custom JS op (arbitrary JS on visitors' pages is a security risk); add later only behind an explicit opt-in. Selectors must be a single selector; css values, attribute names and URL schemes are filtered (`change-ops.ts`).
+- **Goals apply to every variant** via `mergeGoalOps`, because the control has no edits of its own. For element tests the worker counts only goal-flagged clicks as conversions; page tests still count any click.
+- **Editor auth:** the token pins site + test + variant, is domain-separated from request signatures, and only proves the hub sent the admin; the plugin still requires a logged-in user with `edit_pages`. Renewals are capped at 8h from first issue.
+- **CORS is per route** (`lib/cors.ts`): any origin, no credentials, for `/ingest` and `/editor/*`; dashboard origins with cookies elsewhere. This fixed a Phase 1 bug (the tracker's JSON + custom-header fetch would have failed its preflight).
+- **Editor is vanilla TS, not React** (the plan said React) to keep the overlay small.
+- Editor preview reuses `packages/tracker/src/applier.ts`, so preview equals production.
+- Inline runtime is 1.43KB gz of 2KB; tracker 1.17KB of 8KB.
 
 ## How to run the checks
 
@@ -49,8 +62,7 @@ npm run tracker:build     # rebuild the browser bundles; outputs are copied into
 
 CI (`.github/workflows/ci.yml`) also runs `php -l` over the plugin and
 `docker compose config` on both compose files. Runs on every push and PR, and
-manually via `gh workflow run CI`. 68 tests as of the last commit
-(shared 6, stats 51, worker 11).
+manually via `gh workflow run CI`. Counts as of the last commit: shared 23, stats 51, tracker 9, worker 14, api 5, editor 37.
 
 Migrations: edit `packages/db/src/schema.ts`, then from `hub/apps/api` run
 `DATABASE_URL=postgres://x:x@localhost:5432/x npx drizzle-kit generate` (no
@@ -69,6 +81,10 @@ Keep them additive.
 - The restored repo needed a workflow-file push and an "Enable Actions" click before CI ran. It is working now.
 - Chrome extension was not connected. The built-in browser works for UI checks: run `npx vite preview --port 4173` in the dashboard (it proxies `/api` to port 4000), point a throwaway mock API at 4000, and stop both afterwards.
 - `gh` is signed in as `jamesdunnington`.
+- **Always confirm CI is green after each push** (`gh run watch --exit-status <id>`, then `gh run list --limit 1`). Local passes hid three CI failures in Phase 3: jsdom 30 needs Node >=22.22 but CI is Node 20, so one jsdom 25 is pinned at the **root** (vitest is hoisted; a copy nested in a workspace is not enough); `npm run build --workspaces` is alphabetical, so the root build now builds `@tcw/shared` first (a stale local `shared/dist` hid it).
+- **The Write/Edit gate is per file and per session:** the first create/edit of each file is refused once, asking for importers, affected API and the verbatim instruction. Answer briefly, then retry the identical call.
+- **Heredocs mangle backslashes** (an escape became an octal literal, a doubled backslash collapsed). Use Write/Edit for files with regexes or escapes, and `String.raw` in tests.
+- Real-browser checks: a scratch harness (fake WordPress page on :4173 plus a mock hub with CORS on :4000, kept in the session scratchpad) verified the editor end to end in the built-in browser. Native select elements can't be driven by the automation, so unit-test those.
 
 ## Conventions worth keeping
 
