@@ -69,4 +69,27 @@ class TCWAB_Archive {
 			['%s', '%s', '%d', '%s']
 		);
 	}
+
+	/**
+	 * Writes/updates the permanent local record once a test is decided.
+	 * Null values (e.g. an unknown start time) are left out so the column keeps its default.
+	 *
+	 * @param array<string, mixed> $row
+	 */
+	public function record_result(array $row): void {
+		global $wpdb;
+		$formats = [
+			'hub_test_id' => '%s', 'test_name' => '%s', 'wp_post_id' => '%d', 'winner_key' => '%s',
+			'redundant_deleted' => '%d', 'started_at' => '%s', 'decided_at' => '%s',
+		];
+		$data = ['created_at' => current_time('mysql')];
+		$fmt  = ['%s'];
+		foreach ($formats as $column => $format) {
+			if (isset($row[$column])) {
+				$data[$column] = $row[$column];
+				$fmt[]         = $format;
+			}
+		}
+		$wpdb->replace(self::table_name(), $data, $fmt);
+	}
 }

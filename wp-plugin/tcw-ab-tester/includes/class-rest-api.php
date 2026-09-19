@@ -13,12 +13,14 @@ class TCWAB_REST_API {
 
 	private TCWAB_Hub_Client $hub_client;
 	private TCWAB_Variants $variants;
-	private TCWAB_Archive $archive;
+	private TCWAB_Finalizer $finalizer;
+	private TCWAB_Cache_Purge $cache;
 
-	public function __construct(TCWAB_Hub_Client $hub_client, TCWAB_Variants $variants, TCWAB_Archive $archive) {
+	public function __construct(TCWAB_Hub_Client $hub_client, TCWAB_Variants $variants, TCWAB_Finalizer $finalizer, TCWAB_Cache_Purge $cache) {
 		$this->hub_client = $hub_client;
-		$this->variants    = $variants;
-		$this->archive     = $archive;
+		$this->variants   = $variants;
+		$this->finalizer  = $finalizer;
+		$this->cache      = $cache;
 	}
 
 	public function register_routes(): void {
@@ -28,16 +30,19 @@ class TCWAB_REST_API {
 				'callback'            => [$this, 'get_post_info'],
 				'permission_callback' => [$this, 'verify_signature'],
 			]);
-
 			register_rest_route('tcwab/v1', '/variants', [
 				'methods'             => 'POST',
 				'callback'            => [$this, 'create_variant'],
 				'permission_callback' => [$this, 'verify_signature'],
 			]);
-
 			register_rest_route('tcwab/v1', '/config', [
 				'methods'             => 'POST',
 				'callback'            => [$this, 'store_config'],
+				'permission_callback' => [$this, 'verify_signature'],
+			]);
+			register_rest_route('tcwab/v1', '/finalize', [
+				'methods'             => 'POST',
+				'callback'            => [$this, 'finalize'],
 				'permission_callback' => [$this, 'verify_signature'],
 			]);
 		});
@@ -56,9 +61,9 @@ class TCWAB_REST_API {
 			return false;
 		}
 
-		// get_route() returns "/tcwab/v1/..." — this must match exactly the
-		// path hub/apps/api/src/lib/wp-client.ts signed (it signs the path
-		// portion of "/wp-json/tcwab/v1/..."), so rebuild it the same way.
+		// get_route() returns "/tcwab/v1/..." — this must match exactly the path
+		// hub/apps/api/src/lib/wp-client.ts signed (it signs the path portion of
+		// "/wp-json/tcwab/v1/..."), so rebuild it the same way.
 		$path = '/wp-json' . $request->get_route();
 		$body = $request->get_body();
 
@@ -88,7 +93,6 @@ class TCWAB_REST_API {
 		if (is_wp_error($result)) {
 			return $result;
 		}
-
 		return new WP_REST_Response($result, 201);
 	}
 
@@ -96,8 +100,25 @@ class TCWAB_REST_API {
 		$params = $request->get_json_params();
 		$tests  = is_array($params['tests'] ?? null) ? $params['tests'] : [];
 
+		// Cached pages embed the config, so purge every post whose test set changed
+		// (posts in the old config AND the new one) once the new config is saved.
+		$previous = get_option('tcwab_runtime_config', []);
 		update_option('tcwab_runtime_config', $tests, false);
 
+		$affected = array_merge(
+			array_column(is_array($previous) ? $previous : [], 'wpPostId'),
+			array_column($tests, 'wpPostId')
+		);
+		$this->cache->purge_posts($affected);
+
 		return new WP_REST_Response(['ok' => true, 'testCount' => count($tests)], 200);
+	}
+
+	public function finalize(WP_REST_Request $request) {
+		$result = $this->finalizer->finalize((array) $request->get_json_params());
+		if (is_wp_error($result)) {
+			return $result;
+		}
+		return new WP_REST_Response($result, 200);
 	}
 }

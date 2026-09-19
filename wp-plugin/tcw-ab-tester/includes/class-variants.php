@@ -26,6 +26,10 @@ class TCWAB_Variants {
 		'_edit_last',
 		'_wp_old_slug',
 		'_wp_old_date',
+		'_tcwab_variant_of',
+		'_tcwab_test_id',
+		'_tcwab_variant_key',
+		'_tcwab_variant_label',
 	];
 
 	/**
@@ -38,7 +42,7 @@ class TCWAB_Variants {
 		}
 
 		$new_id = wp_insert_post([
-			'post_title'   => $label,
+			'post_title'   => $source->post_title, // identical to the original: only the content under test may differ
 			'post_content' => $source->post_content,
 			'post_excerpt' => $source->post_excerpt,
 			'post_type'    => $source->post_type,
@@ -63,6 +67,7 @@ class TCWAB_Variants {
 		update_post_meta($new_id, self::META_VARIANT_OF, $source_id);
 		update_post_meta($new_id, self::META_TEST_ID, $test_id);
 		update_post_meta($new_id, self::META_VARIANT_KEY, $variant_key);
+		update_post_meta($new_id, '_tcwab_variant_label', $label);
 
 		return [
 			'variantWpPostId' => $new_id,
@@ -70,7 +75,7 @@ class TCWAB_Variants {
 		];
 	}
 
-	private function copy_postmeta(int $source_id, int $target_id): void {
+	public function copy_postmeta(int $source_id, int $target_id): void {
 		$all_meta = get_post_meta($source_id);
 		foreach ($all_meta as $key => $values) {
 			if (in_array($key, self::META_BLOCKLIST, true)) {
@@ -82,7 +87,7 @@ class TCWAB_Variants {
 		}
 	}
 
-	private function copy_taxonomies(int $source_id, int $target_id): void {
+	public function copy_taxonomies(int $source_id, int $target_id): void {
 		$post_type  = get_post_type($source_id);
 		$taxonomies = get_object_taxonomies($post_type);
 		foreach ($taxonomies as $taxonomy) {
@@ -119,5 +124,22 @@ class TCWAB_Variants {
 			'permalink' => get_permalink($post),
 			'wordCount' => str_word_count(wp_strip_all_tags($post->post_content)),
 		];
+	}
+
+	/** Marks variant copies in the wp-admin post list so nobody mistakes one for a normal post. */
+	public function add_post_state(array $states, WP_Post $post): array {
+		if ($this->is_variant($post->ID)) {
+			$label    = (string) get_post_meta($post->ID, '_tcwab_variant_label', true);
+			$states[] = $label !== '' ? 'TCW test copy: ' . esc_html($label) : 'TCW test copy';
+		}
+		return $states;
+	}
+
+	/** Postmeta keys on a post that may be copied onto another (everything except internal/test-tracking keys). */
+	public function copyable_meta_keys(int $post_id): array {
+		return array_values(array_filter(
+			array_keys(get_post_meta($post_id)),
+			static fn($key) => !in_array($key, self::META_BLOCKLIST, true)
+		));
 	}
 }
