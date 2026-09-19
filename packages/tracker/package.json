@@ -11,7 +11,6 @@
   "devDependencies": {
     "@tcw/shared": "^0.1.0",
     "esbuild": "^0.24.0",
-    "jsdom": "^25.0.1",
     "typescript": "^5.6.3",
     "vitest": "^2.1.9"
   }
