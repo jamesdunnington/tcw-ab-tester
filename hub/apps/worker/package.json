@@ -12,6 +12,8 @@
   "dependencies": {
     "@tcw/db": "*",
     "@tcw/shared": "*",
+    "@tcw/stats": "*",
+    "bullmq": "^5.34.0",
     "dotenv": "^16.4.5",
     "drizzle-orm": "^0.36.1",
     "ioredis": "^5.4.1",

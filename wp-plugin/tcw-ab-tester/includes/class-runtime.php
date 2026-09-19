@@ -68,7 +68,7 @@ class TCWAB_Runtime {
 			if (!is_array($test) || (int) ($test['wpPostId'] ?? 0) !== $post_id) {
 				continue;
 			}
-			if (($test['status'] ?? '') !== 'running') {
+			if (!in_array($test['status'] ?? '', ['running', 'winner_found', 'inconclusive'], true)) { // still splitting until the owner decides
 				continue;
 			}
 			$matching[] = [

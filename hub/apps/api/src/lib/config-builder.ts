@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { tests, variants } from "@tcw/db";
 import type { RuntimeConfigPushEntry } from "./wp-client.js";
@@ -12,7 +12,7 @@ export async function buildRuntimeConfig(siteId: string): Promise<RuntimeConfigP
   const rows = await db
     .select()
     .from(tests)
-    .where(and(eq(tests.siteId, siteId), eq(tests.status, "running")));
+    .where(and(eq(tests.siteId, siteId), inArray(tests.status, ["running", "winner_found", "inconclusive"])));
 
   const out: RuntimeConfigPushEntry[] = [];
   for (const test of rows) {
