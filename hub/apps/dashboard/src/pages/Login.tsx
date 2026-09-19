@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useAuth } from "../context/AuthContext.js";
+import { Icon } from "../components/Icon.js";
 
 export function LoginPage() {
   const { login, bootstrap } = useAuth();
@@ -25,36 +26,27 @@ export function LoginPage() {
 
   return (
     <div className="auth-screen">
-      <form className="auth-card" onSubmit={onSubmit}>
+      <form className="card auth-card" onSubmit={onSubmit}>
         <h1>TCW A/B Tester</h1>
-        <div className="tab-switch">
-          <button type="button" className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}>
-            Log in
-          </button>
-          <button type="button" className={mode === "bootstrap" ? "active" : ""} onClick={() => setMode("bootstrap")}>
-            First-time setup
-          </button>
+        <div className="tab-switch" role="group" aria-label="Sign in or first-time setup">
+          <button type="button" aria-pressed={mode === "login"} onClick={() => setMode("login")}>Log in</button>
+          <button type="button" aria-pressed={mode === "bootstrap"} onClick={() => setMode("bootstrap")}>First-time setup</button>
         </div>
 
-        <label>
-          Email
-          <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-        </label>
-        <label>
-          Password
-          <input
-            type="password"
-            required
-            minLength={10}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </label>
+        <div className="field">
+          <label htmlFor="email">Email</label>
+          <input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor="password">Password</label>
+          <input id="password" type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} required minLength={10} value={password} onChange={(e) => setPassword(e.target.value)} aria-describedby="password-hint" />
+          <span id="password-hint" className="hint">{mode === "bootstrap" ? "At least 10 characters. This creates the first admin account." : "At least 10 characters."}</span>
+        </div>
 
-        {error && <p className="error">{error}</p>}
+        {error && <div className="banner banner-danger" role="alert"><Icon name="alert" /><div>{error}</div></div>}
 
-        <button type="submit" disabled={submitting}>
-          {mode === "login" ? "Log in" : "Create admin account"}
+        <button type="submit" className="btn" disabled={submitting} style={{ width: "100%" }}>
+          {submitting ? "Please wait…" : mode === "login" ? "Log in" : "Create admin account"}
         </button>
       </form>
     </div>

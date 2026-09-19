@@ -39,7 +39,8 @@ export async function recomputeTest(testId: string, now = new Date()): Promise<W
 
   // Traffic keeps splitting until the user decides (docs/PLAN.md section 6), so the
   // test stays "live" — only the status label moves between the three live states.
-  if (decision.status !== test.status) {
+  // A test the owner stopped manually (endedAt set) keeps the status they gave it.
+  if (decision.status !== test.status && !test.endedAt) {
     await db.update(tests).set({ status: decision.status }).where(eq(tests.id, testId));
   }
   return decision;

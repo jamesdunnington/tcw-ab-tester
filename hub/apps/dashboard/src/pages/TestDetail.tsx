@@ -1,149 +1,183 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../lib/api.js";
-import type { Test, TestResults, Variant } from "../lib/types.js";
+import type { StatsResponse, Test, Variant } from "../lib/types.js";
+import { DecisionPanel } from "../components/DecisionPanel.js";
+import { Icon } from "../components/Icon.js";
+import { StatsPanel } from "../components/StatsPanel.js";
+import { StatusBadge } from "../components/StatusBadge.js";
+
+const LIVE = ["running", "winner_found", "inconclusive"];
 
 export function TestDetailPage() {
   const { testId } = useParams<{ testId: string }>();
   const [test, setTest] = useState<Test | null>(null);
   const [variants, setVariants] = useState<Variant[]>([]);
-  const [results, setResults] = useState<TestResults | null>(null);
+  const [stats, setStats] = useState<StatsResponse | null>(null);
   const [label, setLabel] = useState("B (variant)");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  function refresh() {
+  const load = useCallback(() => {
     if (!testId) return;
-    api.get<{ test: Test; variants: Variant[] }>(`/api/tests/${testId}`).then((res) => {
-      setTest(res.test);
-      setVariants(res.variants);
-    });
     api
-      .get<TestResults>(`/api/tests/${testId}/results`)
-      .then(setResults)
-      .catch(() => setResults(null));
-  }
+      .get<{ test: Test; variants: Variant[] }>(`/api/tests/${testId}`)
+      .then((res) => {
+        setTest(res.test);
+        setVariants(res.variants);
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : "Could not load this test."));
+    api.get<StatsResponse>(`/api/tests/${testId}/stats`).then(setStats).catch(() => setStats(null));
+  }, [testId]);
 
-  useEffect(refresh, [testId]);
+  useEffect(load, [load]);
 
-  async function addVariant() {
+  async function act(path: string, body: unknown, success: string, failure: string) {
     setError(null);
+    setNotice(null);
     setBusy(true);
     try {
-      await api.post(`/api/tests/${testId}/variants`, { label });
-      refresh();
+      await api.post(`/api/tests/${testId}/${path}`, body);
+      setNotice(success);
+      load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create variant — is the site connected and reachable?");
+      setError(err instanceof Error ? `${failure} (${err.message})` : failure);
     } finally {
       setBusy(false);
     }
   }
 
-  async function start() {
-    setError(null);
-    setBusy(true);
-    try {
-      await api.post(`/api/tests/${testId}/start`);
-      refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to start the test.");
-    } finally {
-      setBusy(false);
-    }
+  function addVariant(e: FormEvent) {
+    e.preventDefault();
+    void act("variants", { label }, "Variant B was created on WordPress.", "Could not create the variant. Is the site connected and reachable?");
   }
 
-  async function stop() {
-    setBusy(true);
-    try {
-      await api.post(`/api/tests/${testId}/stop`);
-      refresh();
-    } finally {
-      setBusy(false);
-    }
+  if (!test) {
+    return error ? (
+      <div className="banner banner-danger" role="alert"><Icon name="alert" /><div>{error}</div></div>
+    ) : (
+      <div aria-busy="true" aria-label="Loading test">
+        <div className="skeleton" style={{ height: 32, width: "50%", marginBottom: 16 }} />
+        <div className="skeleton" style={{ height: 160 }} />
+      </div>
+    );
   }
 
-  if (!test) return <p>Loading…</p>;
+  const isLive = LIVE.includes(test.status) && !test.endedAt;
+  const decidable = test.status === "winner_found" || test.status === "inconclusive";
+  const threshold = Number(test.confidenceThreshold);
+  const winnerLabel = variants.find((v) => v.key === stats?.latest?.winnerKey)?.label;
 
   return (
     <div>
-      <p><Link to={`/sites/${test.siteId}/tests`}>← Tests</Link></p>
-      <h1>{test.name}</h1>
-      <p>
-        Status: <span className={`status status-${test.status}`}>{test.status}</span>
-        {" · "}
-        <a href={test.wpPermalink} target="_blank" rel="noreferrer">View original post</a>
-      </p>
+      <Link to={`/sites/${test.siteId}/tests`} className="back-link"><Icon name="back" />All tests</Link>
 
-      {error && <p className="error">{error}</p>}
+      <div className="page-header">
+        <div>
+          <h1>{test.name}</h1>
+          <p className="muted small">
+            <StatusBadge status={test.status} /> ·{" "}
+            <a href={test.wpPermalink} target="_blank" rel="noreferrer">View original page<span className="visually-hidden"> (opens in a new tab)</span></a>
+          </p>
+        </div>
+        <div className="form-row" style={{ flex: "0 0 auto" }}>
+          {isLive && (
+            <button className="btn btn-secondary" disabled={busy} onClick={() => act("recompute", undefined, "Recomputing. Refresh in a few seconds.", "Could not queue a recompute.")}>
+              <Icon name="refresh" />Recompute now
+            </button>
+          )}
+          {test.status === "running" && (
+            <button className="btn btn-secondary" disabled={busy} onClick={() => act("stop", undefined, "The test was stopped.", "Could not stop the test.")}>Stop test</button>
+          )}
+        </div>
+      </div>
 
-      <h2>Variants</h2>
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>Key</th>
-            <th>Label</th>
-            <th>Traffic</th>
-            <th>Control?</th>
-            <th>Preview</th>
-          </tr>
-        </thead>
-        <tbody>
-          {variants.map((v) => (
-            <tr key={v.id}>
-              <td>{v.key}</td>
-              <td>{v.label}</td>
-              <td>{v.trafficWeight}%</td>
-              <td>{v.isControl ? "Yes (original)" : "No"}</td>
-              <td>{v.previewUrl ? <a href={v.previewUrl} target="_blank" rel="noreferrer">Preview</a> : "—"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {notice && <div className="banner banner-success" role="status"><Icon name="check" /><div>{notice}</div></div>}
+      {error && <div className="banner banner-danger" role="alert"><Icon name="alert" /><div>{error}</div></div>}
 
-      {test.status === "draft" && variants.length < 2 && (
-        <div className="inline-form">
-          <input value={label} onChange={(e) => setLabel(e.target.value)} />
-          <button onClick={addVariant} disabled={busy}>Create variant B on WordPress</button>
+      {test.status === "winner_found" && (
+        <div className="banner banner-success" role="status">
+          <Icon name="trophy" />
+          <div><strong>{winnerLabel ?? "A variant"} is the recommended winner.</strong> Every condition is met. Decide below what the page should end up with.</div>
+        </div>
+      )}
+      {test.status === "inconclusive" && (
+        <div className="banner banner-warn">
+          <Icon name="alert" />
+          <div><strong>No clear winner.</strong> You can keep the original, or choose a version anyway.</div>
+        </div>
+      )}
+      {test.status === "archived" && stats?.decision && (
+        <div className="banner banner-info">
+          <Icon name="archive" />
+          <div>
+            <strong>Decided on {new Date(stats.decision.decidedAt).toLocaleDateString()}.</strong>{" "}
+            {stats.decision.deleteRedundant ? "The redundant copy was deleted." : "The redundant copy was kept as a hidden draft."}{" "}
+            {stats.decision.reason ? `Reason: ${stats.decision.reason} ` : ""}Results stay in the archive.
+          </div>
         </div>
       )}
 
+      <h2>Variants</h2>
+      <div className="table-wrap">
+        <table className="data-table">
+          <caption className="visually-hidden">Variants in this test</caption>
+          <thead>
+            <tr><th>Key</th><th>Label</th><th className="num">Traffic</th><th>Preview</th></tr>
+          </thead>
+          <tbody>
+            {variants.map((v) => (
+              <tr key={v.id}>
+                <td className="mono">{v.key}</td>
+                <td>{v.label}{v.isControl && !/original/i.test(v.label) ? " (original)" : ""}</td>
+                <td className="num">{v.trafficWeight}%</td>
+                <td>
+                  {v.previewUrl ? (
+                    <a href={v.previewUrl} target="_blank" rel="noreferrer">Preview<span className="visually-hidden"> {v.label} (opens in a new tab)</span></a>
+                  ) : "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {test.status === "draft" && variants.length < 2 && (
+        <form className="card" onSubmit={addVariant} style={{ marginTop: 16 }}>
+          <div className="form-row">
+            <div className="field">
+              <label htmlFor="variant-label">Name for variant B</label>
+              <input id="variant-label" type="text" value={label} onChange={(e) => setLabel(e.target.value)} required />
+              <span className="hint">WordPress makes a copy of the page. Edit the copy, then start the test.</span>
+            </div>
+            <button className="btn" disabled={busy}>{busy ? "Creating…" : "Create variant B"}</button>
+          </div>
+        </form>
+      )}
       {test.status === "draft" && variants.length >= 2 && (
-        <button onClick={start} disabled={busy}>Start test</button>
+        <p style={{ marginTop: 16 }}>
+          <button className="btn" disabled={busy} onClick={() => act("start", undefined, "The test is live.", "Could not start the test.")}><Icon name="play" />Start test</button>
+        </p>
       )}
 
-      {test.status === "running" && (
-        <button onClick={stop} disabled={busy}>Stop test</button>
-      )}
-
-      {results && (
+      {stats && (isLive || test.status === "archived" || test.status === "inconclusive") && (
         <>
           <h2>Results</h2>
-          <p className="muted">{results.note}</p>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Variant</th>
-                <th>Sessions</th>
-                <th>Avg. active time</th>
-                <th>Avg. scroll depth</th>
-                <th>Click rate</th>
-                <th>Rage clicks</th>
-              </tr>
-            </thead>
-            <tbody>
-              {results.results.map((r) => (
-                <tr key={r.variantId}>
-                  <td>{r.label}{r.isControl ? " (A)" : ""}</td>
-                  <td>{r.sessions}</td>
-                  <td>{r.avgActiveSeconds}s</td>
-                  <td>{r.avgScrollDepthPct}%</td>
-                  <td>{r.clickRate}%</td>
-                  <td>{r.rageClicks}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <StatsPanel stats={stats} variants={variants} confidenceThreshold={threshold} />
         </>
+      )}
+
+      {decidable && (
+        <div style={{ marginTop: 24 }}>
+          <DecisionPanel
+            key={stats?.latest?.winnerKey ?? "no-recommendation"} // re-initialise the default choice once the recommendation arrives
+            testId={test.id}
+            variants={variants}
+            recommendedKey={stats?.latest?.winnerKey ?? null}
+            onDone={() => { setNotice("Decision applied. The test is archived."); load(); }}
+          />
+        </div>
       )}
     </div>
   );

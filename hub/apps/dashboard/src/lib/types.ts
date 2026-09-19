@@ -77,3 +77,38 @@ export interface TestResults {
   results: VariantResult[];
   note: string;
 }
+
+export interface Gate {
+  name: string;
+  passed: boolean;
+  detail: string;
+}
+
+export interface VariantAnalysis {
+  key: string;
+  sessions: number;
+  meanScore: number;
+  pBest: number;
+  expectedLoss: number;
+  clickRate: number;
+  lift: { estimate: number | null; ci: [number, number] } | null;
+  confirmation: { welchP: number; mannWhitneyP: number; adjustedWelchP: number } | null;
+}
+
+export interface StatsResponse {
+  latest: null | {
+    computedAt: string;
+    status: TestStatus;
+    winnerKey: string | null;
+    gates: Gate[];
+    variants: VariantAnalysis[];
+    srm: { p: number; isMismatched: boolean };
+  };
+  history: Array<{ computedAt: string; status: string; leaderPBest: number }>;
+  decision: null | {
+    recommendedVariantKey: string | null;
+    deleteRedundant: boolean;
+    reason: string | null;
+    decidedAt: string;
+  };
+}

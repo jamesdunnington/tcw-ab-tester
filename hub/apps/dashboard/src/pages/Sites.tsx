@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api.js";
+import { Icon } from "../components/Icon.js";
 import type { Site, SiteCredentials } from "../lib/types.js";
 
 export function SitesPage() {
@@ -13,12 +14,8 @@ export function SitesPage() {
 
   function refresh() {
     setLoading(true);
-    api
-      .get<{ sites: Site[] }>("/api/sites")
-      .then((res) => setSites(res.sites))
-      .finally(() => setLoading(false));
+    api.get<{ sites: Site[] }>("/api/sites").then((res) => setSites(res.sites)).finally(() => setLoading(false));
   }
-
   useEffect(refresh, []);
 
   async function onCreate(e: FormEvent) {
@@ -31,66 +28,63 @@ export function SitesPage() {
       setDisplayName("");
       refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create site.");
+      setError(err instanceof Error ? err.message : "Failed to add the site.");
     }
   }
 
   return (
     <div>
       <h1>Sites</h1>
+      <p className="muted">Each WordPress site connects to this hub with its own key and secret.</p>
 
       {justCreated && (
-        <div className="callout">
-          <strong>{justCreated.site.displayName} connected.</strong> Paste these into the WordPress plugin's
-          settings page now — the secret is shown only this once.
-          <dl>
-            <dt>Hub URL</dt>
-            <dd><code>{window.location.origin}</code></dd>
-            <dt>Site Key</dt>
-            <dd><code>{justCreated.credentials.siteKey}</code></dd>
-            <dt>Site Secret</dt>
-            <dd><code>{justCreated.credentials.siteSecret}</code></dd>
-          </dl>
-          <button onClick={() => setJustCreated(null)}>I've copied these</button>
+        <div className="banner banner-warn" role="status">
+          <Icon name="alert" />
+          <div>
+            <strong>{justCreated.site.displayName} added. Copy these into the WordPress plugin now.</strong> The secret is shown only this once.
+            <dl style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 12px", margin: "12px 0" }}>
+              <dt>Hub URL</dt><dd style={{ margin: 0 }}><code>{window.location.origin}</code></dd>
+              <dt>Site key</dt><dd style={{ margin: 0, wordBreak: "break-all" }}><code>{justCreated.credentials.siteKey}</code></dd>
+              <dt>Site secret</dt><dd style={{ margin: 0, wordBreak: "break-all" }}><code>{justCreated.credentials.siteSecret}</code></dd>
+            </dl>
+            <button className="btn btn-secondary" onClick={() => setJustCreated(null)}>I have copied these</button>
+          </div>
         </div>
       )}
 
-      <form className="inline-form" onSubmit={onCreate}>
-        <input placeholder="example.com" value={domain} onChange={(e) => setDomain(e.target.value)} required />
-        <input placeholder="Display name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required />
-        <button type="submit">Add site</button>
+      <form className="card" onSubmit={onCreate}>
+        <h2 style={{ marginTop: 0 }}>Add a site</h2>
+        <div className="form-row">
+          <div className="field"><label htmlFor="domain">Domain</label><input id="domain" type="text" value={domain} onChange={(e) => setDomain(e.target.value)} required /><span className="hint">For example example.com</span></div>
+          <div className="field"><label htmlFor="display-name">Display name</label><input id="display-name" type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required /></div>
+          <button type="submit" className="btn">Add site</button>
+        </div>
+        {error && <p className="error-text" role="alert">{error}</p>}
       </form>
-      {error && <p className="error">{error}</p>}
 
+      <h2>Connected sites</h2>
       {loading ? (
-        <p>Loading…</p>
+        <div aria-busy="true" aria-label="Loading sites"><div className="skeleton" style={{ height: 120 }} /></div>
       ) : sites.length === 0 ? (
-        <p>No sites connected yet.</p>
+        <div className="card empty">No sites yet. Add one above to get started.</div>
       ) : (
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Site</th>
-              <th>Domain</th>
-              <th>Plugin</th>
-              <th>Last seen</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {sites.map((s) => (
-              <tr key={s.id}>
-                <td>{s.displayName}</td>
-                <td>{s.domain}</td>
-                <td>{s.pluginVersion ?? "not connected yet"}</td>
-                <td>{s.lastSeenAt ? new Date(s.lastSeenAt).toLocaleString() : "never"}</td>
-                <td>
-                  <Link to={`/sites/${s.id}/tests`}>View tests →</Link>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="table-wrap">
+          <table className="data-table">
+            <caption className="visually-hidden">Connected sites</caption>
+            <thead><tr><th>Site</th><th>Domain</th><th>Plugin</th><th>Last seen</th><th><span className="visually-hidden">Actions</span></th></tr></thead>
+            <tbody>
+              {sites.map((s) => (
+                <tr key={s.id}>
+                  <td>{s.displayName}</td>
+                  <td>{s.domain}</td>
+                  <td>{s.pluginVersion ?? "Not connected yet"}</td>
+                  <td>{s.lastSeenAt ? new Date(s.lastSeenAt).toLocaleString() : "Never"}</td>
+                  <td><Link to={`/sites/${s.id}/tests`}>Tests<span className="visually-hidden"> for {s.displayName}</span></Link></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

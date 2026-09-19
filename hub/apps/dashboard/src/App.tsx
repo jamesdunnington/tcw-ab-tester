@@ -7,7 +7,7 @@ import { TestDetailPage } from "./pages/TestDetail.js";
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   const { user, loading } = useAuth();
-  if (loading) return <p className="center-loading">Loading…</p>;
+  if (loading) return <p className="empty" role="status">Loading…</p>;
   if (!user) return <Navigate to="/login" replace />;
   return children;
 }
@@ -16,16 +16,18 @@ export function App() {
   const { user, logout } = useAuth();
 
   return (
-    <div className="shell">
+    <>
+      <a className="skip-link" href="#main">Skip to content</a>
       {user && (
         <header className="topbar">
-          <strong>TCW A/B Tester</strong>
-          <span>
-            {user.email} · <button className="link-button" onClick={() => logout()}>Log out</button>
-          </span>
+          <span className="brand">TCW A/B Tester</span>
+          <nav aria-label="Account" className="small">
+            <span className="muted">{user.email}</span>{" "}
+            <button className="link-button" onClick={() => logout()}>Log out</button>
+          </nav>
         </header>
       )}
-      <main>
+      <main id="main" tabIndex={-1}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/sites" element={<RequireAuth><SitesPage /></RequireAuth>} />
@@ -34,6 +36,6 @@ export function App() {
           <Route path="*" element={<Navigate to="/sites" replace />} />
         </Routes>
       </main>
-    </div>
+    </>
   );
 }
