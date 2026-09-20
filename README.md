@@ -97,18 +97,36 @@ docker compose -f dev/docker-compose.yml up --build
 
 Then:
 1. Open http://localhost:5174 → **First-time setup** → create an admin account.
-2. **Sites** → add a site (any domain label is fine for local testing) →
-   copy the Site Key + Site Secret shown once.
-3. Open http://localhost:8080 → finish the WordPress install → activate
-   **TCW A/B Tester** under Plugins.
-4. In wp-admin → Settings → TCW A/B Tester: Hub URL `http://api:4000`
-   (container-to-container — not `localhost`), paste the Site Key/Secret,
-   **Save Settings**, then **Test Connection**.
+2. Open http://host.docker.internal:8080 (not `localhost`: see "Which address goes where" below) → finish the
+   WordPress install → activate **TCW A/B Tester** under Plugins. On Windows and macOS Docker Desktop makes
+   `host.docker.internal` resolve on your own machine too; on Linux add `127.0.0.1 host.docker.internal` to
+   your hosts file.
+3. **Sites** → add a site with the domain `http://host.docker.internal:8080` → copy the Site Key + Site Secret
+   shown once.
+4. In wp-admin → Settings → TCW A/B Tester: Hub URL `http://host.docker.internal:4000`, paste the Site
+   Key/Secret, **Save Settings**, then **Test Connection**. Leave "Hub address for visitors" blank.
 5. Back in the dashboard: **Sites → View tests → Create test**, entering the
    WordPress post/page ID to test. **Create challenger**, then **Start test**.
-6. Visit the post on http://localhost:8080 a few times (private/incognito
-   windows to get different `tcwab_vid` assignments) to generate data, then
-   check **Results** on the test's page in the dashboard.
+6. Visit the post on http://host.docker.internal:8080 a few times (private/incognito
+   windows to get different `tcwab_vid` assignments; you must be logged out of wp-admin, because logged-in
+   editors and admins are kept out of tests) to generate data, then check **Results** on the test's page in
+   the dashboard.
+
+### Which address goes where
+
+Two addresses are each used twice, once by a server and once by a visitor's browser. They only cause trouble
+when the server and the browser reach the same thing by different names, which is what Docker does by default.
+
+| Where you enter it | What the server uses it for | What the browser uses it for |
+|---|---|---|
+| **Site domain** in the hub (Sites → add a site) | The hub calls WordPress there (`/wp-json/...`) | The tracker's requests must come from this host: `/ingest` rejects other origins. `www.` and `http` vs `https` do not matter; a trailing slash or path is stripped. |
+| **Hub URL** in the plugin | WordPress calls the hub there (heartbeat, config) | Printed into your pages as the tracking address, and used to load the visual editor and heatmap |
+| **Hub address for visitors** in the plugin (optional) | not used | Replaces the Hub URL in what is printed into pages. Leave blank unless visitors reach the hub by a different address than your server does. |
+
+In production these all coincide: the site domain is the site's public address and the Hub URL is
+`https://<HUB_DOMAIN>`, so there is nothing to think about. In Docker, `localhost` means a different machine
+inside each container, so use one name that works from everywhere: `host.docker.internal`, as in the steps above.
+If a test never records visitors, check the site domain first: it must match the address in the visitor's browser.
 
 ### Production deploy
 

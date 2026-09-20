@@ -42,7 +42,7 @@ class TCWAB_Runtime {
 		}
 
 		$config = [
-			'ingestUrl' => $this->hub_client->get_hub_url() . '/ingest',
+			'ingestUrl' => $this->hub_client->get_public_hub_url() . '/ingest',
 			'siteKey'   => $this->hub_client->get_site_key(),
 			'consent'   => $this->default_consent(),
 			'strict'    => $this->strict_consent(),

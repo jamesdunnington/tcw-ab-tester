@@ -11,6 +11,7 @@ if (!defined('WP_UNINSTALL_PLUGIN')) {
 }
 
 delete_option('tcwab_hub_url');
+delete_option('tcwab_hub_public_url');
 delete_option('tcwab_site_key');
 delete_option('tcwab_site_secret');
 delete_option('tcwab_runtime_config');

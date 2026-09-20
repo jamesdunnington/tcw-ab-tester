@@ -5,6 +5,7 @@ import { ingestBatchSchema, INGEST_STREAM_KEY } from "@tcw/shared";
 import { db } from "../db/client.js";
 import { sites } from "@tcw/db";
 import { redis } from "../lib/redis.js";
+import { originMatchesSite } from "../lib/origin.js";
 
 const RATE_LIMIT_WINDOW_SECONDS = 300;
 const RATE_LIMIT_MAX_REQUESTS = 300; // ~1 batch every second, generous for a real visitor
@@ -51,7 +52,7 @@ export async function ingestRoutes(app: FastifyInstance): Promise<void> {
     // the real trust boundary is that this endpoint can only ever write
     // low-value analytics events, never mutate a test or a WP post.
     const origin = request.headers.origin ?? request.headers.referer ?? "";
-    if (origin && !origin.includes(site.domain.replace(/^https?:\/\//, ""))) {
+    if (origin && !originMatchesSite(origin, site.domain)) {
       return reply.code(403).send({ error: "origin_mismatch" });
     }
 

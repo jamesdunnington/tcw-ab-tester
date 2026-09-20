@@ -91,7 +91,7 @@ class TCWAB_Editor_Bridge {
 			return;
 		}
 		$heatmap = 'heatmap' === $this->mode;
-		$hub_url = $this->hub_client->get_hub_url();
+		$hub_url = $this->hub_client->get_public_hub_url(); // the visitor's browser loads the bundle and calls back
 		$boot    = [
 			'hubUrl'     => $hub_url,
 			'siteKey'    => $this->hub_client->get_site_key(),

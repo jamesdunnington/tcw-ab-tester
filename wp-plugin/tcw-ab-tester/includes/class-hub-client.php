@@ -18,12 +18,23 @@ if (!defined('ABSPATH')) {
 class TCWAB_Hub_Client {
 
 	private const OPTION_HUB_URL     = 'tcwab_hub_url';
+	private const OPTION_PUBLIC_URL  = 'tcwab_hub_public_url';
 	private const OPTION_SITE_KEY    = 'tcwab_site_key';
 	private const OPTION_SITE_SECRET = 'tcwab_site_secret';
 	private const SIGNATURE_SKEW_SECONDS = 300;
 
 	public function get_hub_url(): string {
 		return rtrim((string) get_option(self::OPTION_HUB_URL, ''), '/');
+	}
+
+	/**
+	 * The hub address to put in pages for visitors' browsers (tracking endpoint, editor and heatmap bundles).
+	 * Same as the hub URL unless the browser reaches the hub by a different name than this server does,
+	 * as in Docker (WordPress calls host.docker.internal, the browser calls localhost).
+	 */
+	public function get_public_hub_url(): string {
+		$public = rtrim((string) get_option(self::OPTION_PUBLIC_URL, ''), '/');
+		return '' !== $public ? $public : $this->get_hub_url();
 	}
 
 	public function get_site_key(): string {
@@ -38,8 +49,9 @@ class TCWAB_Hub_Client {
 		return $this->get_hub_url() !== '' && $this->get_site_key() !== '' && $this->get_site_secret() !== '';
 	}
 
-	public function save_settings(string $hub_url, string $site_key, string $site_secret): void {
+	public function save_settings(string $hub_url, string $site_key, string $site_secret, string $public_url = ''): void {
 		update_option(self::OPTION_HUB_URL, esc_url_raw(rtrim($hub_url, '/')), false);
+		update_option(self::OPTION_PUBLIC_URL, esc_url_raw(rtrim($public_url, '/')), false);
 		update_option(self::OPTION_SITE_KEY, sanitize_text_field($site_key), false);
 		// Not autoloaded: this only needs to be read on the rare signed
 		// request, not on every single page load.

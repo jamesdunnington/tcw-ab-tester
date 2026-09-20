@@ -43,7 +43,9 @@ class TCWAB_Admin {
 		$site_key   = isset($_POST['tcwab_site_key']) ? sanitize_text_field(wp_unslash($_POST['tcwab_site_key'])) : '';
 		$site_secret = isset($_POST['tcwab_site_secret']) ? sanitize_text_field(wp_unslash($_POST['tcwab_site_secret'])) : '';
 
-		$this->hub_client->save_settings($hub_url, $site_key, $site_secret);
+		$public_url = isset($_POST['tcwab_hub_public_url']) ? sanitize_text_field(wp_unslash($_POST['tcwab_hub_public_url'])) : '';
+
+		$this->hub_client->save_settings($hub_url, $site_key, $site_secret, $public_url);
 		update_option('tcwab_strict_consent', isset($_POST['tcwab_strict_consent']) ? 1 : 0, false);
 		update_option('tcwab_include_staff', isset($_POST['tcwab_include_staff']) ? 1 : 0, false);
 
@@ -79,7 +81,14 @@ class TCWAB_Admin {
 					<tr>
 						<th scope="row"><label for="tcwab_hub_url"><?php esc_html_e('Hub URL', 'tcw-ab-tester'); ?></label></th>
 						<td><input type="url" id="tcwab_hub_url" name="tcwab_hub_url" class="regular-text"
-							value="<?php echo esc_attr($hub_url); ?>" placeholder="https://ab.yourdomain.com" /></td>
+							value="<?php echo esc_attr($hub_url); ?>" placeholder="https://ab.yourdomain.com" />
+							<p class="description"><?php esc_html_e('The address this server uses to reach the hub.', 'tcw-ab-tester'); ?></p></td>
+					</tr>
+					<tr>
+						<th scope="row"><label for="tcwab_hub_public_url"><?php esc_html_e('Hub address for visitors (optional)', 'tcw-ab-tester'); ?></label></th>
+						<td><input type="url" id="tcwab_hub_public_url" name="tcwab_hub_public_url" class="regular-text"
+							value="<?php echo esc_attr((string) get_option('tcwab_hub_public_url', '')); ?>" placeholder="<?php echo esc_attr($hub_url); ?>" />
+							<p class="description"><?php esc_html_e('Leave blank on a normal setup. Fill it in only when visitors reach the hub by a different address than this server does (for example in Docker). It is printed into your pages for tracking and for the visual editor.', 'tcw-ab-tester'); ?></p></td>
 					</tr>
 					<tr>
 						<th scope="row"><label for="tcwab_site_key"><?php esc_html_e('Site Key', 'tcw-ab-tester'); ?></label></th>

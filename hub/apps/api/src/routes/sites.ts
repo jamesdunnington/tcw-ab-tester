@@ -6,6 +6,7 @@ import { db } from "../db/client.js";
 import { sites } from "@tcw/db";
 import { encryptSecret, findPosts } from "@tcw/core";
 import { requireAuth } from "../lib/session.js";
+import { normalizeSiteDomain } from "../lib/origin.js";
 
 const createSiteSchema = z.object({
   domain: z.string().min(3).max(255),
@@ -50,11 +51,14 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/api/sites", async (request, reply) => {
     const body = createSiteSchema.parse(request.body);
+    // Store scheme://host[:port]: the hub calls WordPress at this address and matches visitors' Origin against it.
+    const domain = normalizeSiteDomain(body.domain);
+    if (!domain) return reply.code(400).send({ error: "invalid_domain" });
     const { siteKey, siteSecret } = generateSiteCredentials();
     const [site] = await db
       .insert(sites)
       .values({
-        domain: body.domain,
+        domain,
         displayName: body.displayName,
         siteKey,
         secretEncrypted: encryptSecret(siteSecret),
