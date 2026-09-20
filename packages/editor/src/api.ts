@@ -27,8 +27,8 @@ export class EditorApi {
       headers: { authorization: `Bearer ${this.cfg.token}`, "content-type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-    const data = (await res.json().catch(() => ({}))) as { error?: string } & T;
-    if (!res.ok) throw new Error(data.error ?? `http_${res.status}`);
+    const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string } & T;
+    if (!res.ok) throw new Error(data.message ?? data.error ?? `http_${res.status}`);
     return data;
   }
 

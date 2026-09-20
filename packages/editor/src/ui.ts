@@ -90,7 +90,15 @@ export class Sidebar {
     this.bindPx("size", "font-size");
     this.bindPx("radius", "border-radius");
     this.els.hide.addEventListener("change", () => this.edit((o, t) => setHidden(o, t, (this.els.hide as HTMLInputElement).checked)));
-    this.bind("goal", (v) => this.edit((o, t) => setGoal(o, t, v.trim() || null)));
+    this.bind("goal", (v) => {
+      const name = v.trim();
+      // Same rule the hub enforces (packages/shared change-ops); say so here instead of failing later on Save.
+      if (name && !/^[a-z0-9_-]{1,40}$/i.test(name)) {
+        this.setStatus("Goal name: letters, numbers, - or _ only, no spaces (max 40).", true);
+        return;
+      }
+      this.edit((o, t) => setGoal(o, t, name || null));
+    });
     this.els.device.addEventListener("change", () => hooks.onWidth(Number((this.els.device as HTMLSelectElement).value) || null));
     this.els.undo.addEventListener("click", () => store.undo());
     this.els.redo.addEventListener("click", () => store.redo());

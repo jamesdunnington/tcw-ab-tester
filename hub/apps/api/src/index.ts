@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import Fastify from "fastify";
+import { ZodError } from "zod";
 import fastifyCookie from "@fastify/cookie";
 import fastifyCors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
@@ -35,6 +36,15 @@ app.addContentTypeParser("application/json", { parseAs: "string" }, (request, bo
   } catch (err) {
     done(err as Error, undefined);
   }
+});
+
+// Bad input is the caller's mistake, not a server fault: answer 400 with what was wrong, not a bare 500.
+app.setErrorHandler((err, _request, reply) => {
+  if (err instanceof ZodError) {
+    const message = err.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; ");
+    return reply.code(400).send({ error: "invalid_request", message });
+  }
+  return reply.send(err);
 });
 
 await app.register(fastifyCookie, { secret: env.SESSION_SECRET });
