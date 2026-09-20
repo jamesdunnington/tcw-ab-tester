@@ -45,6 +45,7 @@ class TCWAB_Admin {
 
 		$this->hub_client->save_settings($hub_url, $site_key, $site_secret);
 		update_option('tcwab_strict_consent', isset($_POST['tcwab_strict_consent']) ? 1 : 0, false);
+		update_option('tcwab_include_staff', isset($_POST['tcwab_include_staff']) ? 1 : 0, false);
 
 		add_action('admin_notices', function () {
 			echo '<div class="notice notice-success is-dismissible"><p>' .
@@ -91,6 +92,18 @@ class TCWAB_Admin {
 							<input type="password" id="tcwab_site_secret" name="tcwab_site_secret" class="regular-text"
 								placeholder="<?php echo $this->hub_client->is_configured() ? esc_attr__('•••••••• (unchanged)', 'tcw-ab-tester') : ''; ?>" />
 							<p class="description"><?php esc_html_e('Shown once when the site is created on the hub. Leave blank to keep the current secret.', 'tcw-ab-tester'); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e('Your own visits', 'tcw-ab-tester'); ?></th>
+						<td>
+							<label for="tcwab_include_staff">
+								<input type="checkbox" id="tcwab_include_staff" name="tcwab_include_staff" value="1" <?php checked((bool) get_option('tcwab_include_staff', false)); ?> />
+								<?php esc_html_e('Include logged-in editors and admins in tests', 'tcw-ab-tester'); ?>
+							</label>
+							<p class="description">
+								<?php esc_html_e('Off by default: while you are logged in as an editor or admin you always see the original page and your visits are not counted. Turn this on only to try a live test yourself.', 'tcw-ab-tester'); ?>
+							</p>
 						</td>
 					</tr>
 					<tr>

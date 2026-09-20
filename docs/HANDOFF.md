@@ -39,9 +39,12 @@ After a winner replaces the original, the test's **Outcome** section (archived t
 
 Missing root `.dockerignore` (host Windows node_modules broke the Linux image) · dev `SECRET_ENCRYPTION_KEY` 60 chars, needs 64 · the plugin's `pre_get_posts` filter made every variant page a 404 (now skips singular requests) · variants leaked into the Pages menu block and sitemaps (added `get_pages` and sitemap filters) · the tracker/config were only printed on the original post so challenger traffic was never recorded (`tests_for_post` now matches variants of the tested post) · the worker XACKed but never deleted ingest entries, so the Redis stream grew forever (now XDEL) · promote overwrote the original with no way back (WordPress does NOT keep the previous content; now saved as a revision first) · promote passed unslashed content to `wp_update_post`, corrupting backslashes (now `wp_slash`).
 
+## Staff exclusion (done)
+
+Logged-in users who can `edit_others_posts` (editors, admins) get no test config: no split, no tracking, always the original page; decided winners (permanent rules) still apply to them. `TCWAB_Runtime::is_excluded_visitor()` in `class-runtime.php`; the settings page has "Include logged-in editors and admins in tests" (option `tcwab_include_staff`) and there is a `tcwab_exclude_visitor` filter. **Consequence for walkthroughs: while the owner is logged in to wp-admin the front end always shows the original page; to see a live test, use a private window (logged out) or turn the setting on.** Safe under page caching because logged-in users normally bypass the cache. Checked on real WordPress with a scratch script (anonymous, admin, editor, subscriber, setting on); no PHP test suite exists in the repo.
+
 ## Bugs and gaps found, NOT fixed
 
-- Admin/editor exclusion from tests is in the plan (section 3) but not implemented anywhere.
 - Worker crash recovery: `reclaimStale` in `hub/apps/worker/src/consumer.ts` XAUTOCLAIMs entries but never processes or acks them.
 - The hub always calls `/wp-json/...`; a site on Plain permalinks fails. Plugin Test Connection should detect and warn.
 - One field does two jobs twice: the site `domain` is both where the hub calls WordPress AND the Origin `/ingest` accepts; the plugin's hub URL is both its server-to-server address and the browser's ingest URL (`class-runtime.php` uses `get_hub_url()`; `HUB_PUBLIC_URL` exists in the API env but is unused for this). Fine in production (same public URL), needs a single hostname in Docker (see below). README's "any domain label is fine for local testing" is wrong and must be corrected.
@@ -101,5 +104,5 @@ Facts worth knowing: heat data flows tracker -> `heat.ts` `deriveHeatBins` -> `h
 
 1. Owner checks the Outcome panel in the dashboard (restore is already done on the dev "Sample Page" test, so it shows the restored state).
 2. Owner logs in to wp-admin at the new hostname; walk the element test + editor + goal + winner + permanent rule.
-3. Fix the open bugs (admin exclusion and crash recovery first), then the README domain note, then update this file.
+3. Fix the open bugs (worker crash recovery first), then the README domain note, then update this file.
 4. Run `npm run ci:local` and the Docker build again, commit, and ask the owner before any push or deploy.

@@ -33,7 +33,9 @@ class TCWAB_Runtime {
 		}
 
 		$post_id      = get_queried_object_id();
-		$active_tests = $this->tests_for_post($post_id);
+		// Staff are not visitors: their views and clicks would pollute the numbers, and they should always see the real page.
+		// Decided winners (rules) still apply to them, so what they see matches what visitors see.
+		$active_tests = self::is_excluded_visitor() ? [] : $this->tests_for_post($post_id);
 		$rules        = self::rules_for_post($post_id);
 		if (empty($active_tests) && empty($rules)) {
 			return;
@@ -58,6 +60,17 @@ class TCWAB_Runtime {
 		if (!empty($active_tests)) {
 			wp_enqueue_script('tcwab-tracker', TCWAB_PLUGIN_URL . 'assets/tracker.js', [], TCWAB_VERSION, true);
 		}
+	}
+
+	/**
+	 * Editors and admins are kept out of every test (docs/PLAN.md section 3): no assignment, no tracking.
+	 * Logged-in users are normally not served the page cache, so a check at render time is safe. The
+	 * "Include logged-in staff" setting (option tcwab_include_staff) or the tcwab_exclude_visitor filter
+	 * turns this off, e.g. for QA of a test on the live site.
+	 */
+	public static function is_excluded_visitor(): bool {
+		$excluded = !get_option('tcwab_include_staff', false) && is_user_logged_in() && current_user_can('edit_others_posts');
+		return (bool) apply_filters('tcwab_exclude_visitor', $excluded);
 	}
 
 	/**
