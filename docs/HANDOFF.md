@@ -15,7 +15,9 @@ The first real-WordPress shakedown was done on a **page test** end to end. It fo
 
 Proven in the running dev stack: connect plugin (signed heartbeat), create page test, duplicate page, start test (runtime config injected, split, redirect to challenger), tracking on both original and challenger, ingest -> Redis -> worker -> Postgres -> stats (challenger +78% found, gates held until 200 sessions and 7 days), heatmap click layer, winner flow (apply challenger + delete copy: original URL serves the challenger's content on the same post ID and slug, variant post and meta gone, archive row in WP and hub, library item recorded, runtime config emptied).
 
-**Not yet tested (needs the owner logged in to wp-admin at `http://host.docker.internal:8080/wp-admin`, the agent must not type passwords):** element test + visual editor, goal, permanent rule, heatmap overlay on a real theme, tracking from a real browser to the hub (the built-in browser pane blocks calls to port 4000; use the owner's Chrome, set `document.cookie='wp_consent_statistics=allow; path=/'` first because there is no consent tool), Claude Desktop connector, VPS deploy, backup + restore.
+**Also proven with the owner logged in (Chrome via the Claude in Chrome tools): element test + visual editor + goal, real-browser tracking incl. goal click, 10/10 visitor split with sticky arms, winner -> permanent rule, "Remove the permanent change", and the heatmap overlay on the real theme (Clicks, Scroll stops and Attention layers render, variant switch works; clicks whose element is not on the page are counted as "not found").**
+
+**Not yet tested (needs the owner logged in to wp-admin at `http://host.docker.internal:8080/wp-admin`, the agent must not type passwords):** Claude Desktop connector (tracking from a real browser needs `document.cookie='wp_consent_statistics=allow; path=/'` first because there is no consent tool; the built-in browser pane blocks calls to port 4000, use the owner's Chrome), VPS deploy, backup + restore.
 
 ## Done: "Restore original" (the owner asked for this)
 
