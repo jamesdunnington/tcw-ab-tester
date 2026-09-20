@@ -62,8 +62,8 @@ export function consentRouter(deps: { db: Database; service: OAuthService; repo:
 
     const rawScope = body.scope;
     const ticked = Array.isArray(rawScope) ? rawScope.map(String) : typeof rawScope === "string" ? [rawScope] : [];
-    // The client's own request caps what can be granted; when it asked for nothing, the user's ticks decide.
-    const scopes = normalizeScopes(pending.scopes.length ? pending.scopes : [...SCOPES], ticked);
+    // The user's ticks decide. Claude's connector only ever asks for hub:read, so capping by the request would drop draft/live.
+    const scopes = normalizeScopes([...SCOPES], ticked);
     const code = await deps.service.issueCode({ clientId: pending.clientId, userId: user.id, redirectUri: pending.redirectUri, codeChallenge: pending.codeChallenge, scopes, resource: pending.resource });
     await deps.db.insert(auditLog).values({ actor: user.email, action: "mcp.authorized", target: pending.clientId, meta: { client: clientName, scopes } });
     res.redirect(302, redirectTo(pending.redirectUri, { code, state: pending.state }));

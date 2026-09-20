@@ -219,6 +219,22 @@ describe("OAuth flow", () => {
     expect(rows.length).toBeGreaterThan(0);
   });
 
+  it("grants what the user ticked even when the client only asked for hub:read", async () => {
+    const page = await fetch(`${base}/authorize?${new URLSearchParams({ client_id: clientId, redirect_uri: CALLBACK, response_type: "code", code_challenge: CHALLENGE, code_challenge_method: "S256", state: "st8", scope: "hub:read" })}`);
+    const pending = /name="pending" value="([^"]+)"/.exec(await page.text())?.[1] ?? "";
+    const body = new URLSearchParams({ pending, email: "admin@test.dev", password: "correct horse battery", decision: "approve" });
+    for (const s of ["hub:read", "hub:draft", "hub:live"]) body.append("scope", s);
+    const res = await fetch(`${base}/oauth/consent`, { method: "POST", body, redirect: "manual", headers: { "content-type": "application/x-www-form-urlencoded" } });
+    const code = new URL(res.headers.get("location") as string).searchParams.get("code") as string;
+    const tokenRes = await fetch(`${base}/token`, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "authorization_code", code, code_verifier: VERIFIER, client_id: clientId, redirect_uri: CALLBACK }) });
+    expect(tokenRes.ok).toBe(true);
+    const client = await connect(((await tokenRes.json()) as Record<string, string>).access_token);
+    const names = (await client.listTools()).tools.map((t) => t.name);
+    expect(names).toContain("create_element_test");
+    expect(names).toContain("start_test");
+    await client.close();
+  });
+
   it("rejects a tampered pending request", async () => {
     const res = await fetch(`${base}/oauth/consent`, { method: "POST", redirect: "manual", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ pending: "e30.bad", email: "admin@test.dev", password: "correct horse battery", decision: "approve" }) });
     expect(res.status).toBe(400);
