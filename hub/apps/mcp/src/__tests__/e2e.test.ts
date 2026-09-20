@@ -126,7 +126,7 @@ beforeAll(async () => {
   const [user] = await db.insert(schema.users).values({ email: "admin@test.dev", passwordHash: hashPassword("correct horse battery") }).returning();
   const [site] = await db.insert(schema.sites).values({ domain: `http://127.0.0.1:${wpPort}`, displayName: "Test site", siteKey: "sk_test", secretEncrypted: encryptSecret("shh") }).returning();
   const [test] = await db.insert(schema.tests).values({ siteId: site.id, name: "Seeded", type: "page", status: "running", wpPostId: 12, wpPermalink: `http://127.0.0.1:${wpPort}/home/`, startedAt: new Date(Date.now() - 3 * 86_400_000) }).returning();
-  const [a, b] = await db.insert(schema.variants).values([{ testId: test.id, key: "a", label: "A (original)", isControl: true, trafficWeight: 50 }, { testId: test.id, key: "b", label: "B (variant)", isControl: false, trafficWeight: 50 }]).returning();
+  const [a, b] = await db.insert(schema.variants).values([{ testId: test.id, key: "a", label: "Control", isControl: true, trafficWeight: 50 }, { testId: test.id, key: "b", label: "Challenger", isControl: false, trafficWeight: 50 }]).returning();
   Object.assign(ids, { user: user.id, site: site.id, test: test.id });
 
   // 10 sessions on A (2 clicked), 10 on B (5 clicked); B engages longer and scrolls deeper.
@@ -395,7 +395,7 @@ describe("OAuth flow", () => {
 
       const items = jsonOf(await client.callTool({ name: "list_library", arguments: { type: "element" } }));
       expect(items).toHaveLength(1);
-      expect(items[0]).toMatchObject({ outcome: "applied_variant", winnerLabel: "B (variant)", reusable: true });
+      expect(items[0]).toMatchObject({ outcome: "applied_variant", winnerLabel: "Challenger", reusable: true });
       expect(items[0].tags).toEqual(expect.arrayContaining(["element", "copy"]));
       expect(jsonOf(await client.callTool({ name: "list_library", arguments: { tag: "copy" } }))).toHaveLength(1);
       expect(jsonOf(await client.callTool({ name: "list_library", arguments: { tag: "nope" } }))).toHaveLength(0);
@@ -434,8 +434,8 @@ describe("OAuth flow", () => {
       const client = await connect(tokens.access_token);
       const [t] = await db.insert(schema.tests).values({ siteId: ids.site, name: "Pricing page", type: "page", status: "inconclusive", wpPostId: 12, wpPermalink: "http://127.0.0.1:1/p/", startedAt: new Date(Date.now() - 9 * 86_400_000) }).returning();
       await db.insert(schema.variants).values([
-        { testId: t.id, key: "a", label: "A (original)", isControl: true, trafficWeight: 50 },
-        { testId: t.id, key: "b", label: "B (variant)", isControl: false, trafficWeight: 50, wpPostId: 77 },
+        { testId: t.id, key: "a", label: "Control", isControl: true, trafficWeight: 50 },
+        { testId: t.id, key: "b", label: "Challenger", isControl: false, trafficWeight: 50, wpPostId: 77 },
       ]);
       const applied = jsonOf(await client.callTool({ name: "apply_winner", arguments: { testId: t.id, chosenVariantKey: "b", deleteRedundant: true, confirm: true } }));
       expect(applied.decided).toBe(true);

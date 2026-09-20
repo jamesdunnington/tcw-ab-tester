@@ -78,6 +78,8 @@ final class TCWAB_Plugin {
 		add_action('template_redirect', [$this->editor_bridge, 'gate'], 1);
 		add_action('wp', [$this->seo_guard, 'maybe_noindex_variant']);
 		add_filter('pre_get_posts', [$this->seo_guard, 'exclude_variants_from_queries']);
+		add_filter('get_pages', [$this->seo_guard, 'exclude_variants_from_page_lists']);
+		add_filter('wp_sitemaps_posts_query_args', [$this->seo_guard, 'exclude_variants_from_sitemaps']);
 		add_filter('display_post_states', [$this->variants, 'add_post_state'], 10, 2);
 		add_action('admin_menu', [$this->admin, 'register_menu']);
 		add_action('admin_init', [$this->admin, 'register_settings']);

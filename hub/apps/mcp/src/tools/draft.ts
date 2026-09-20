@@ -16,7 +16,7 @@ export function registerDraftTools(server: McpServer): void {
     {
       title: "Create an element test (draft)",
       description:
-        "Creates a DRAFT test on one post or page where variant B changes elements (text, colours, visibility, links) and variant A is the untouched original. Nothing goes live. Next: inspect_page to find selectors, then set_variant_ops.",
+        "Creates a DRAFT test on one post or page where the challenger changes elements (text, colours, visibility, links) and the control is the untouched original. Nothing goes live. Next: inspect_page to find selectors, then set_variant_ops.",
       inputSchema: createElementTestSchema.shape,
       annotations: WRITE,
     },
@@ -40,7 +40,7 @@ export function registerDraftTools(server: McpServer): void {
       title: "Create a page test (draft)",
       description:
         "Creates a DRAFT test that compares a whole post or page against a WordPress copy of it. The copy is a private draft the user edits in WordPress. Nothing goes live and no visitors see the copy until the test starts.",
-      inputSchema: { ...createPageTestSchema.shape, variantLabel: z.string().min(1).max(160).default("B (variant)") },
+      inputSchema: { ...createPageTestSchema.shape, variantLabel: z.string().min(1).max(160).default("Challenger") },
       annotations: WRITE,
     },
     async ({ variantLabel, ...rest }, extra) => {
@@ -70,7 +70,7 @@ export function registerDraftTools(server: McpServer): void {
     {
       title: "Set a variant's changes",
       description:
-        "Replaces ALL change operations of variant B in a DRAFT element test. Operations: text, html, style (css properties), attr, hide, goal. Add at least one goal (the element whose clicks count as conversions). Selectors must match exactly one element: take them from inspect_page. Validation errors are returned so you can fix and retry. Refused once a test is running.",
+        "Replaces ALL change operations of the challenger in a DRAFT element test. Operations: text, html, style (css properties), attr, hide, goal. Add at least one goal (the element whose clicks count as conversions). Selectors must match exactly one element: take them from inspect_page. Validation errors are returned so you can fix and retry. Refused once a test is running.",
       inputSchema: { testId: z.string().uuid(), variantKey: z.string().min(1).max(32).default("b"), ops: changeOpsSchema },
       annotations: { ...WRITE, idempotentHint: true },
     },

@@ -36,7 +36,9 @@ class TCWAB_SEO_Guard {
 
 	/** Keeps variant posts out of the blog loop, search, archives, and feeds. */
 	public function exclude_variants_from_queries(WP_Query $query): WP_Query {
-		if (is_admin() || !$query->is_main_query()) {
+		// A singular request is someone opening the variant's own URL (the runtime redirects
+		// visitors there). Filtering it too would turn that page into a 404.
+		if (is_admin() || !$query->is_main_query() || $query->is_singular()) {
 			return $query;
 		}
 
@@ -48,5 +50,25 @@ class TCWAB_SEO_Guard {
 		$query->set('meta_query', $meta_query);
 
 		return $query;
+	}
+
+	/** Keeps variant pages out of the Pages menu block, wp_list_pages() and page pickers on the front end. */
+	public function exclude_variants_from_page_lists(array $pages): array {
+		if (is_admin()) {
+			return $pages;
+		}
+		$variants = tcwab()->variants;
+		return array_values(array_filter($pages, static fn($page) => !is_object($page) || !$variants->is_variant((int) $page->ID)));
+	}
+
+	/** Keeps variants out of the core XML sitemaps. */
+	public function exclude_variants_from_sitemaps(array $args): array {
+		$meta_query   = isset($args['meta_query']) ? (array) $args['meta_query'] : [];
+		$meta_query[] = [
+			'key'     => '_tcwab_variant_of',
+			'compare' => 'NOT EXISTS',
+		];
+		$args['meta_query'] = $meta_query;
+		return $args;
 	}
 }

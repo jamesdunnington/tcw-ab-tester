@@ -27,8 +27,8 @@ beforeAll(async () => {
   const [site] = await db.insert(schema.sites).values({ domain: "https://s.example", displayName: "S", siteKey: "k", secretEncrypted: "x" }).returning();
   const [test] = await db.insert(schema.tests).values({ siteId: site.id, name: "Hero <b>test</b>", status: "winner_found", wpPostId: 1, wpPermalink: "https://s.example/", startedAt: ago(10) }).returning();
   const [a, b] = await db.insert(schema.variants).values([
-    { testId: test.id, key: "a", label: "A (original)", isControl: true, trafficWeight: 50 },
-    { testId: test.id, key: "b", label: "B (variant)", isControl: false, trafficWeight: 50 },
+    { testId: test.id, key: "a", label: "Control", isControl: true, trafficWeight: 50 },
+    { testId: test.id, key: "b", label: "Challenger", isControl: false, trafficWeight: 50 },
   ]).returning();
   ids = { site: site.id, test: test.id, a: a.id, b: b.id };
 }, 60_000);
@@ -48,7 +48,7 @@ const resetClaim = () => db.update(schema.tests).set({ winnerNotifiedAt: null })
 
 describe("buildWinnerEmail", () => {
   it("names the winner with its numbers and links to the test", () => {
-    const m = buildWinnerEmail({ testName: "Hero", winnerLabel: "B (variant)", pBest: 0.972, lift: 0.123, url: "https://ab/tests/1" });
+    const m = buildWinnerEmail({ testName: "Hero", winnerLabel: "Challenger", pBest: 0.972, lift: 0.123, url: "https://ab/tests/1" });
     expect(m.subject).toBe("A/B test has a winner: Hero");
     expect(m.text).toContain("97.2% chance it is best");
     expect(m.text).toContain("+12.3% engagement vs the original");
@@ -78,7 +78,7 @@ describe("notifyWinnerFound", () => {
     expect(sent).toHaveLength(1);
     expect(sent[0].to).toBe("owner@example.com");
     expect(sent[0].text).toContain("https://ab.example.com/tests/" + ids.test);
-    expect(sent[0].text).toContain("B (variant)");
+    expect(sent[0].text).toContain("Challenger");
     expect(await notifyWinnerFound({ db, transport: t, config }, ids.test, decision)).toBe("already_sent");
     expect(sent).toHaveLength(1);
   });

@@ -15,7 +15,7 @@ export function TestDetailPage() {
   const [test, setTest] = useState<Test | null>(null);
   const [variants, setVariants] = useState<Variant[]>([]);
   const [stats, setStats] = useState<StatsResponse | null>(null);
-  const [label, setLabel] = useState("B (variant)");
+  const [label, setLabel] = useState("Challenger");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -67,7 +67,7 @@ export function TestDetailPage() {
 
   function addVariant(e: FormEvent) {
     e.preventDefault();
-    void act("variants", { label }, "Variant B was created on WordPress.", "Could not create the variant. Is the site connected and reachable?");
+    void act("variants", { label }, "The challenger was created on WordPress.", "Could not create the variant. Is the site connected and reachable?");
   }
 
   if (!test) {
@@ -152,7 +152,7 @@ export function TestDetailPage() {
             {variants.map((v) => (
               <tr key={v.id}>
                 <td className="mono">{v.key}</td>
-                <td>{v.label}{v.isControl && !/original/i.test(v.label) ? " (original)" : ""}</td>
+                <td>{v.label}{v.isControl && !/control|original/i.test(v.label) ? " (control)" : ""}</td>
                 <td className="num">{v.trafficWeight}%</td>
                 <td>
                   {isElement ? (
@@ -176,16 +176,16 @@ export function TestDetailPage() {
         <form className="card" onSubmit={addVariant} style={{ marginTop: 16 }}>
           <div className="form-row">
             <div className="field">
-              <label htmlFor="variant-label">Name for variant B</label>
+              <label htmlFor="variant-label">Name for the challenger</label>
               <input id="variant-label" type="text" value={label} onChange={(e) => setLabel(e.target.value)} required />
               <span className="hint">WordPress makes a copy of the page. Edit the copy, then start the test.</span>
             </div>
-            <button className="btn" disabled={busy}>{busy ? "Creating…" : "Create variant B"}</button>
+            <button className="btn" disabled={busy}>{busy ? "Creating…" : "Create challenger"}</button>
           </div>
         </form>
       )}
       {test.status === "draft" && isElement && !hasEdits && (
-        <p className="hint" style={{ marginTop: 16 }}>Open the visual editor on variant B, change something, and mark at least one goal. Then come back and start the test.</p>
+        <p className="hint" style={{ marginTop: 16 }}>Open the visual editor on the challenger, change something, and mark at least one goal. Then come back and start the test.</p>
       )}
       {test.status === "draft" && variants.length >= 2 && (
         <p style={{ marginTop: 16 }}>

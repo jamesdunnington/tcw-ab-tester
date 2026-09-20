@@ -49,7 +49,7 @@ export async function testRoutes(app: FastifyInstance): Promise<void> {
   // Step 2: ask WP to duplicate the original post into a "b" variant.
   app.post("/api/tests/:id/variants", async (request, reply) => {
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
-    const { label } = z.object({ label: z.string().min(1).max(160).default("B (variant)") }).parse(request.body ?? {});
+    const { label } = z.object({ label: z.string().min(1).max(160).default("Challenger") }).parse(request.body ?? {});
     return send(reply, await addPageVariant(id, label), 201);
   });
 

@@ -122,6 +122,10 @@ main { max-width: 1120px; margin: 0 auto; padding: var(--space-5) var(--space-4)
 .field .hint { color: var(--text-muted); font-size: 0.875rem; }
 .field .error-text { color: var(--danger); font-size: 0.875rem; }
 .form-row { display: flex; gap: var(--space-4); align-items: flex-end; flex-wrap: wrap; }
+/* A hint under one field must not push its neighbours out of line: align rows that
+   hold fields to the top, and drop the button by the label's height so it meets the inputs. */
+.form-row:has(.field) { align-items: flex-start; }
+.form-row:has(.field) > .btn { margin-top: calc(0.9375rem * 1.5 + var(--space-1)); }
 .form-row .field { margin-bottom: 0; flex: 1 1 200px; }
 .choice { display: flex; gap: var(--space-3); align-items: flex-start; min-height: 44px; padding: var(--space-2) 0; }
 .choice input { width: 20px; height: 20px; margin-top: 2px; accent-color: var(--primary); }

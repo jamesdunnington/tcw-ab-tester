@@ -61,7 +61,7 @@ export function TestsPage() {
             <span id="post-id-hint" className="hint">Shown in the address bar when editing: post.php?post=123</span>
           </div>
           <div className="field">
-            <label htmlFor="split">Traffic to variant B (%)</label>
+            <label htmlFor="split">Traffic to the challenger (%)</label>
             <input id="split" type="number" min={1} max={99} value={trafficSplit} onChange={(e) => setTrafficSplit(Number(e.target.value))} required />
           </div>
           <button type="submit" className="btn" disabled={creating}>{creating ? "Creating…" : "Create test"}</button>

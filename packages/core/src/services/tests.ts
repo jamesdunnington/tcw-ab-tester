@@ -47,7 +47,7 @@ export async function createPageTest(input: CreatePageTestInput): Promise<Servic
 
   const [control] = await db
     .insert(variants)
-    .values({ testId: test.id, key: "a", label: "A (original)", isControl: true, trafficWeight: 100 - input.trafficSplit })
+    .values({ testId: test.id, key: "a", label: "Control", isControl: true, trafficWeight: 100 - input.trafficSplit })
     .returning();
   return ok({ test, variants: [control] });
 }
@@ -80,15 +80,15 @@ export async function createElementTest(input: CreateElementTestInput): Promise<
   const created = await db
     .insert(variants)
     .values([
-      { testId: test.id, key: "a", label: "A (original)", isControl: true, trafficWeight: 100 - input.trafficSplit, changeOps: [] },
-      { testId: test.id, key: "b", label: "B (variant)", isControl: false, trafficWeight: input.trafficSplit, changeOps: [] },
+      { testId: test.id, key: "a", label: "Control", isControl: true, trafficWeight: 100 - input.trafficSplit, changeOps: [] },
+      { testId: test.id, key: "b", label: "Challenger", isControl: false, trafficWeight: input.trafficSplit, changeOps: [] },
     ])
     .returning();
   return ok({ test, variants: created });
 }
 
 /** Asks WordPress to duplicate the original post into the next variant key (a page test's "b"). */
-export async function addPageVariant(testId: string, label = "B (variant)"): Promise<ServiceResult<{ variant: Variant }>> {
+export async function addPageVariant(testId: string, label = "Challenger"): Promise<ServiceResult<{ variant: Variant }>> {
   const test = await testOr404(testId);
   if (!test) return fail(404, "test_not_found");
   if (test.type !== "page") return fail(409, "not_a_page_test");

@@ -105,7 +105,7 @@ Then:
    (container-to-container — not `localhost`), paste the Site Key/Secret,
    **Save Settings**, then **Test Connection**.
 5. Back in the dashboard: **Sites → View tests → Create test**, entering the
-   WordPress post/page ID to test. **Create variant B**, then **Start test**.
+   WordPress post/page ID to test. **Create challenger**, then **Start test**.
 6. Visit the post on http://localhost:8080 a few times (private/incognito
    windows to get different `tcwab_vid` assignments) to generate data, then
    check **Results** on the test's page in the dashboard.
