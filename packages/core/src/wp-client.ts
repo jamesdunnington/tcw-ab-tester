@@ -145,6 +145,15 @@ export async function fetchPostSnapshot(site: SiteRow, wpPostId: number): Promis
   return wpRequest<WpPostSnapshot>(site, "GET", `/wp-json/tcwab/v1/posts/${wpPostId}/snapshot`);
 }
 
+/** Puts an original's title, content and excerpt back after a winner replaced them; WordPress keeps the current version as a revision. */
+export async function restorePost(
+  site: SiteRow,
+  wpPostId: number,
+  snapshot: { title: string; content: string; excerpt: string },
+): Promise<{ restored: true; revisionSaved: boolean }> {
+  return wpRequest(site, "POST", `/wp-json/tcwab/v1/posts/${wpPostId}/restore`, snapshot);
+}
+
 export interface LibraryDraftResult {
   postId: number;
   editUrl: string;
@@ -162,4 +171,9 @@ export async function createLibraryDraft(
 /** Stores a change set as a permanent rule on one post (served to everyone, no tracking), without a test. */
 export async function pushPermanentRule(site: SiteRow, args: { ruleId: string; postId: number; ops: ChangeOp[] }): Promise<{ ok: boolean }> {
   return wpRequest<{ ok: boolean }>(site, "POST", "/wp-json/tcwab/v1/rules", args);
+}
+
+/** Removes a permanent rule (an element test's winner) so the page serves its own content again. */
+export async function removePermanentRule(site: SiteRow, ruleId: string): Promise<{ ok: boolean; removed: boolean }> {
+  return wpRequest(site, "DELETE", `/wp-json/tcwab/v1/rules/${encodeURIComponent(ruleId)}`);
 }

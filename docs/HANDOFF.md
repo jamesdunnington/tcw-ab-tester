@@ -7,7 +7,7 @@ Repo: https://github.com/jamesdunnington/tcw-ab-tester (public, default branch *
 
 All five phases and the Claude Desktop connector (`docs/MCP-PLAN.md`) were built earlier and are on GitHub (last pushed commit `1f71dd5`). **Everything since is committed locally and NOT pushed** (the owner says a push to GitHub is a formal production copy: push only when asked, after local Docker CI passes). Nothing is deployed. Production hostnames for later: hub `https://test.thecontentwarrior.work`, MCP `https://mcptest.thecontentwarrior.work` (hub on a VPS, WordPress sites on other servers).
 
-Local commits, oldest first: `ddb6aef` Docker fixes (.dockerignore, 64-char dev key) · `cf302a2` variant 404 + menu leak + Control/Challenger labels · `095ce7f` challenger tracking + Redis stream trim · `a3c0a58` Swiss dashboard restyle, dark toggle, new-tab links · `ef94fe8` logo + favicon · `f44e705` promote keeps the original as a revision · **plus uncommitted work in progress: "Restore original" (see below) and `dev/simulator/sim.mjs`**.
+Local commits, oldest first: `ddb6aef` Docker fixes (.dockerignore, 64-char dev key) · `cf302a2` variant 404 + menu leak + Control/Challenger labels · `095ce7f` challenger tracking + Redis stream trim · `a3c0a58` Swiss dashboard restyle, dark toggle, new-tab links · `ef94fe8` logo + favicon · `f44e705` promote keeps the original as a revision · `0d1a1a3` plugin restore route � **then "Restore original" hub + dashboard (see below)**.
 
 The first real-WordPress shakedown was done on a **page test** end to end. It found and fixed real bugs (list below). 240 unit tests passed locally after the label rename (`npm run ci:local`).
 
@@ -17,20 +17,14 @@ Proven in the running dev stack: connect plugin (signed heartbeat), create page 
 
 **Not yet tested (needs the owner logged in to wp-admin at `http://host.docker.internal:8080/wp-admin`, the agent must not type passwords):** element test + visual editor, goal, permanent rule, heatmap overlay on a real theme, tracking from a real browser to the hub (the built-in browser pane blocks calls to port 4000; use the owner's Chrome, set `document.cookie='wp_consent_statistics=allow; path=/'` first because there is no consent tool), Claude Desktop connector, VPS deploy, backup + restore.
 
-## In progress: "Restore original" (the owner asked for this)
+## Done: "Restore original" (the owner asked for this)
 
-Requirement: after a winner replaces the original, the outcome must let the owner get the original back. The hub already keeps it: `library_items.snapshots.a` holds the original's `title`, `content`, `excerpt`, taken before anything is deleted.
-
-Done (plugin, tested with scratch scripts on real WordPress): `TCWAB_Promoter::restore_original()` (saves the current version as a revision first, refuses test copies and empty snapshots), `TCWAB_Finalizer::restore_original()` (adds cache purge), REST route `POST /wp-json/tcwab/v1/posts/{id}/restore` (signed) with body `{title, content, excerpt}`.
-
-To do, in order:
-1. `packages/core/src/wp-client.ts`: `restorePost(site, wpPostId, snapshot)` calling that route.
-2. `packages/core/src/services/decision.ts` (or a new file): `restoreOriginal(testId, actor)`. Allowed only for an archived **page** test whose chosen variant was not the control, when the library item has `snapshots.a`, and not already restored. Audit-log it. Export from the core index.
-3. Migration (additive): `decisions.restored_at timestamptz`. Edit `packages/db/src/schema.ts`, then in `hub/apps/api` run `DATABASE_URL=postgres://x:x@localhost:5432/x npx drizzle-kit generate`; rebuild `@tcw/db` and `@tcw/core` before testing dependents.
-4. API route `POST /api/tests/:id/restore-original` (see `hub/apps/api/src/routes/decisions.ts`), and expose outcome info on the test response: chosen key, decided date, `restorable`, `restoredAt`.
-5. Dashboard: an **Outcome** section on archived tests with "Restore the original", a confirm dialog (destructive-action pattern, see `ConfirmDialog.tsx`) saying WordPress saves the current version as a revision first, and a "restored on ..." state. Be honest in the UI: the snapshot covers title, content and excerpt only; template, featured image and SEO fields are not restored (extending the snapshot to meta/taxonomies is a follow-up).
-6. Element tests: "restoring" means removing the permanent rule. The plugin has no route for that yet (known gap: delete option `tcwab_permanent_rules` entry by hand). Add one and the same UI.
-7. Optionally an MCP tool (live scope, confirm) in `hub/apps/mcp/src/tools/`. Add tests (`hub/apps/mcp/src/__tests__/e2e.test.ts` uses PGlite + a fake WordPress).
+After a winner replaces the original, the test's **Outcome** section (archived tests) lets the owner get it back.
+- Page tests: `restoreOriginal(testId, actor)` in `packages/core/src/services/decision.ts` sends `library_items.snapshots.a` (title, content, excerpt) to the plugin route `POST /tcwab/v1/posts/{id}/restore`; WordPress saves the current version as a revision first. Template, featured image and SEO fields are NOT in the snapshot and are not restored.
+- Element tests: the same call removes the permanent rule (`DELETE /tcwab/v1/rules/{testId}`).
+- Guards: archived only, chosen variant not the control, snapshot present (page tests), once (atomic claim on `decisions.restored_at`, migration 0005; cleared again if WordPress fails). Audit action `test.original_restored`.
+- API: `POST /api/tests/:id/restore-original`; `GET /api/tests/:id` now also returns `outcome` (`chosenKey`, `chosenLabel`, `decidedAt`, `restorable`, `restoredAt`). Dashboard: `components/OutcomePanel.tsx` with a confirm dialog.
+- Tested: 3 new cases in `hub/apps/mcp/src/__tests__/e2e.test.ts`; run for real against the dev WordPress (the archived "Sample Page" test was restored by a scratch script: original text back, challenger version kept as a revision). `npm run ci:local` green. NOT yet clicked through in the dashboard by a logged-in owner, and not checked visually at 375px / dark. Not done: an MCP tool for it (optional, would go in `hub/apps/mcp/src/tools/`, live scope + confirm).
 
 ## Bugs found by running it for real (all fixed and committed)
 
@@ -96,7 +90,7 @@ Facts worth knowing: heat data flows tracker -> `heat.ts` `deriveHeatBins` -> `h
 
 ## Suggested order for the next session
 
-1. Finish "Restore original" (steps above), test it in the running stack, commit.
+1. Owner checks the Outcome panel in the dashboard (restore is already done on the dev "Sample Page" test, so it shows the restored state).
 2. Owner logs in to wp-admin at the new hostname; walk the element test + editor + goal + winner + permanent rule.
 3. Fix the open bugs (admin exclusion and crash recovery first), then the README domain note, then update this file.
 4. Run `npm run ci:local` and the Docker build again, commit, and ask the owner before any push or deploy.

@@ -45,6 +45,11 @@ class TCWAB_REST_API {
 				'callback'            => [$this, 'store_rule'],
 				'permission_callback' => [$this, 'verify_signature'],
 			]);
+			register_rest_route('tcwab/v1', '/rules/(?P<id>[A-Za-z0-9_-]+)', [
+				'methods'             => 'DELETE',
+				'callback'            => [$this, 'delete_rule'],
+				'permission_callback' => [$this, 'verify_signature'],
+			]);
 			register_rest_route('tcwab/v1', '/posts', [
 				'methods'             => 'GET',
 				'callback'            => [$this, 'search_posts'],
@@ -172,6 +177,10 @@ class TCWAB_REST_API {
 		$this->cache->purge_posts($affected);
 
 		return new WP_REST_Response(['ok' => true, 'testCount' => count($tests)], 200);
+	}
+
+	public function delete_rule(WP_REST_Request $request) {
+		return new WP_REST_Response($this->finalizer->remove_rule((string) $request->get_param('id')), 200);
 	}
 
 	public function restore_original(WP_REST_Request $request) {

@@ -93,13 +93,6 @@ class TCWAB_Finalizer {
 	}
 
 	/**
-	 * Library reuse: a change set that goes live at once as a permanent rule on one post, with no test.
-	 * Same storage and validation as an element-test winner.
-	 *
-	 * @param mixed $ops
-	 * @return array{ok:bool}|WP_Error
-	 */
-	/**
 	 * Restore an original after a winner replaced it, from the copy the hub kept.
 	 *
 	 * @param array<string, mixed> $snapshot
@@ -113,6 +106,13 @@ class TCWAB_Finalizer {
 		return $result;
 	}
 
+	/**
+	 * Library reuse: a change set that goes live at once as a permanent rule on one post, with no test.
+	 * Same storage and validation as an element-test winner.
+	 *
+	 * @param mixed $ops
+	 * @return array{ok:bool}|WP_Error
+	 */
 	public function apply_rule(string $rule_id, int $post_id, $ops) {
 		if ('' === $rule_id || !$post_id || !get_post($post_id)) {
 			return new WP_Error('tcwab_bad_request', 'ruleId and an existing postId are required.', ['status' => 400]);
@@ -122,6 +122,27 @@ class TCWAB_Finalizer {
 		}
 		$this->cache->purge_posts([$post_id]);
 		return ['ok' => true];
+	}
+
+	/**
+	 * Undo an element test's winner: drop its permanent rule so the page serves its own content again.
+	 *
+	 * @return array{ok:bool, removed:bool}
+	 */
+	public function remove_rule(string $rule_id): array {
+		$rules = get_option('tcwab_permanent_rules', []);
+		$rules = is_array($rules) ? $rules : [];
+		$key   = sanitize_text_field($rule_id);
+		if (!isset($rules[$key])) {
+			return ['ok' => true, 'removed' => false];
+		}
+		$post_id = (int) ($rules[$key]['postId'] ?? 0);
+		unset($rules[$key]);
+		update_option('tcwab_permanent_rules', $rules, false);
+		if ($post_id) {
+			$this->cache->purge_posts([$post_id]);
+		}
+		return ['ok' => true, 'removed' => true];
 	}
 
 	/**

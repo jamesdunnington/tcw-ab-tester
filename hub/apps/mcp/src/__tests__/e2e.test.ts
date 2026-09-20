@@ -24,7 +24,7 @@ import { eq } from "drizzle-orm";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import * as schema from "@tcw/db";
-import { configureCore, createHeatmapLink, encryptSecret, decryptSecret, hashPassword } from "@tcw/core";
+import { configureCore, createHeatmapLink, encryptSecret, decryptSecret, getOutcome, hashPassword, restoreOriginal } from "@tcw/core";
 import { verifyEditorToken } from "@tcw/shared";
 import { createApp } from "../app.js";
 
@@ -79,6 +79,8 @@ async function connect(accessToken: string): Promise<Client> {
 let finalizeBody: any = null;
 let draftBody: any = null;
 let ruleBody: any = null;
+let restoreBody: any = null;
+let removedRule: string | null = null;
 const jsonOf = (r: any) => JSON.parse(r.content[0].text);
 
 beforeAll(async () => {
@@ -86,6 +88,10 @@ beforeAll(async () => {
   wp = createServer((req, res) => {
     const url = req.url ?? "";
     const send = (o: unknown) => res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(o));
+    if (url.startsWith("/wp-json/tcwab/v1/rules/") && req.method === "DELETE") {
+      removedRule = decodeURIComponent(url.split("/").pop() ?? "");
+      return send({ ok: true, removed: true });
+    }
     if (url === "/wp-json/tcwab/v1/posts/12/snapshot") return send({ id: 12, type: "page", title: "Home original", content: "<p>original</p>", excerpt: "orig" });
     if (url === "/wp-json/tcwab/v1/posts/77/snapshot") return send({ id: 77, type: "page", title: "Home B", content: "<p>new hero</p>", excerpt: "b" });
     if (url.startsWith("/wp-json/tcwab/v1/library/draft") || url.startsWith("/wp-json/tcwab/v1/rules")) {
@@ -98,6 +104,15 @@ beforeAll(async () => {
         }
         ruleBody = JSON.parse(raw);
         send({ ok: true });
+      });
+      return;
+    }
+    if (url === "/wp-json/tcwab/v1/posts/12/restore") {
+      let raw = "";
+      req.on("data", (c) => (raw += c));
+      req.on("end", () => {
+        restoreBody = JSON.parse(raw);
+        send({ restored: true, revisionSaved: true });
       });
       return;
     }
@@ -450,6 +465,39 @@ describe("OAuth flow", () => {
       expect(draft).toMatchObject({ kind: "draft_post", postId: 99 });
       expect(draftBody).toMatchObject({ title: "Home B", content: "<p>new hero</p>", type: "page", libraryItemId: item.id });
       await client.close();
+    });
+
+    it("restores the original from the library snapshot once, and refuses a second time", async () => {
+      const actor = { userId: ids.user, label: "admin@test.dev" };
+      const [t] = await db.select().from(schema.tests).where(eq(schema.tests.name, "Pricing page"));
+      const before = await getOutcome(t.id);
+      expect(before).toMatchObject({ chosenKey: "b", restorable: true, restoredAt: null });
+
+      const done = await restoreOriginal(t.id, actor);
+      expect(done).toMatchObject({ ok: true, data: { revisionSaved: true } });
+      expect(restoreBody).toEqual({ title: "Home original", content: "<p>original</p>", excerpt: "orig" });
+      expect(await getOutcome(t.id)).toMatchObject({ restorable: false, restoredAt: expect.any(String) });
+
+      const again = await restoreOriginal(t.id, actor);
+      expect(again).toMatchObject({ ok: false, error: "already_restored" });
+      const logged = await db.select().from(schema.auditLog).where(eq(schema.auditLog.action, "test.original_restored"));
+      expect(logged).toHaveLength(1);
+    });
+
+    it("removes an element test's permanent rule instead of restoring content", async () => {
+      const actor = { userId: ids.user, label: "admin@test.dev" };
+      const [t] = await db.select().from(schema.tests).where(eq(schema.tests.type, "element"));
+      const outcome = await getOutcome(t.id);
+      expect(outcome).toMatchObject({ chosenKey: "b", restorable: true });
+      expect(await restoreOriginal(t.id, actor)).toMatchObject({ ok: true });
+      expect(removedRule).toBe(t.id);
+      expect(await getOutcome(t.id)).toMatchObject({ restorable: false, restoredAt: expect.any(String) });
+    });
+
+    it("does not offer a restore for a test that is not archived", async () => {
+      const [t] = await db.insert(schema.tests).values({ siteId: ids.site, name: "Still running", type: "page", status: "running", wpPostId: 12, wpPermalink: "http://127.0.0.1:1/r/" }).returning();
+      expect(await getOutcome(t.id)).toBeNull();
+      expect(await restoreOriginal(t.id, { userId: ids.user, label: "x" })).toMatchObject({ ok: false, error: "not_restorable" });
     });
   });
 });

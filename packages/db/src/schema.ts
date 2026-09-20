@@ -269,6 +269,8 @@ export const decisions = pgTable("decisions", {
   /** What WordPress reported deleting/promoting, kept permanently even after the copy is gone. */
   cleanupManifest: jsonb("cleanup_manifest"),
   decidedAt: timestamp("decided_at", { withTimezone: true }).notNull().defaultNow(),
+  /** Set when the owner put the original back after a winner replaced it ("Restore original"). */
+  restoredAt: timestamp("restored_at", { withTimezone: true }),
 }, (t) => ({
   testIdx: uniqueIndex("decisions_test_idx").on(t.testId),
 }));

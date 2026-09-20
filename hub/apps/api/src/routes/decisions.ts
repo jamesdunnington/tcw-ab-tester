@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { applyDecision, getStats } from "@tcw/core";
+import { applyDecision, getStats, restoreOriginal } from "@tcw/core";
 import { decisionInputSchema, RECOMPUTE_TEST_JOB } from "@tcw/shared";
 import { requireAuth } from "../lib/session.js";
 import { statsQueue } from "../lib/queue.js";
@@ -32,5 +32,18 @@ export async function decisionRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(result.status).send({ error: result.error, ...(detail && typeof detail === "object" ? detail : {}) });
     }
     return reply.send({ ok: true, manifest: result.data.manifest });
+  });
+
+  // Puts the original page back after a winner replaced it (WordPress keeps the current version as a revision).
+  app.post("/api/tests/:id/restore-original", async (request, reply) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    const user = request.currentUser!;
+    const result = await restoreOriginal(id, { userId: user.id, label: user.email });
+    if (!result.ok) {
+      const detail = result.detail;
+      if (result.error === "restore_failed") return reply.code(result.status).send({ error: result.error, message: detail });
+      return reply.code(result.status).send({ error: result.error });
+    }
+    return reply.send({ ok: true, revisionSaved: result.data.revisionSaved });
   });
 }

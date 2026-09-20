@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { createPageTestSchema, createElementTestSchema, changeOpsSchema } from "@tcw/shared";
-import { addPageVariant, createElementTest, createPageTest, saveVariantOps, startTest, stopTest, type ServiceResult } from "@tcw/core";
+import { addPageVariant, createElementTest, createPageTest, getOutcome, saveVariantOps, startTest, stopTest, type ServiceResult } from "@tcw/core";
 import { tests, variants } from "@tcw/db";
 import { db } from "../db/client.js";
 import { requireAuth } from "../lib/session.js";
@@ -27,7 +27,7 @@ export async function testRoutes(app: FastifyInstance): Promise<void> {
     const [test] = await db.select().from(tests).where(eq(tests.id, id)).limit(1);
     if (!test) return reply.code(404).send({ error: "not_found" });
     const variantRows = await db.select().from(variants).where(eq(variants.testId, id));
-    return reply.send({ test, variants: variantRows });
+    return reply.send({ test, variants: variantRows, outcome: await getOutcome(id) });
   });
 
   // Step 1: create the test + control variant "a". WP is queried live for the post's real

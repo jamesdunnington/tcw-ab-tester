@@ -1,0 +1,1 @@
+ALTER TABLE "decisions" ADD COLUMN "restored_at" timestamp with time zone;

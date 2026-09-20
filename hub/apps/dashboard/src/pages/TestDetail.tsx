@@ -2,8 +2,9 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../lib/api.js";
 import { openInNewTab } from "../open-tab.js";
-import type { StatsResponse, Test, Variant } from "../lib/types.js";
+import type { StatsResponse, Test, TestOutcome, Variant } from "../lib/types.js";
 import { DecisionPanel } from "../components/DecisionPanel.js";
+import { OutcomePanel } from "../components/OutcomePanel.js";
 import { HeatmapPanel } from "../components/HeatmapPanel.js";
 import { Icon } from "../components/Icon.js";
 import { StatsPanel } from "../components/StatsPanel.js";
@@ -15,6 +16,7 @@ export function TestDetailPage() {
   const { testId } = useParams<{ testId: string }>();
   const [test, setTest] = useState<Test | null>(null);
   const [variants, setVariants] = useState<Variant[]>([]);
+  const [outcome, setOutcome] = useState<TestOutcome | null>(null);
   const [stats, setStats] = useState<StatsResponse | null>(null);
   const [label, setLabel] = useState("Challenger");
   const [busy, setBusy] = useState(false);
@@ -24,10 +26,11 @@ export function TestDetailPage() {
   const load = useCallback(() => {
     if (!testId) return;
     api
-      .get<{ test: Test; variants: Variant[] }>(`/api/tests/${testId}`)
+      .get<{ test: Test; variants: Variant[]; outcome: TestOutcome | null }>(`/api/tests/${testId}`)
       .then((res) => {
         setTest(res.test);
         setVariants(res.variants);
+        setOutcome(res.outcome);
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Could not load this test."));
     api.get<StatsResponse>(`/api/tests/${testId}/stats`).then(setStats).catch(() => setStats(null));
@@ -139,6 +142,10 @@ export function TestDetailPage() {
             {stats.decision.reason ? `Reason: ${stats.decision.reason} ` : ""}Results stay in the archive.
           </div>
         </div>
+      )}
+
+      {test.status === "archived" && outcome && (
+        <OutcomePanel testId={test.id} isElement={isElement} outcome={outcome} onDone={(msg) => { setNotice(msg); load(); }} />
       )}
 
       <h2>Variants</h2>

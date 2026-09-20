@@ -36,6 +36,13 @@
       "when": 1789861818684,
       "tag": "0004_nappy_union_jack",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789872010709,
+      "tag": "0005_shallow_talisman",
+      "breakpoints": true
     }
   ]
 }

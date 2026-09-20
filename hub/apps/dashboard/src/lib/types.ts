@@ -115,6 +115,16 @@ export interface StatsResponse {
   };
 }
 
+/** What a decided test ended up with, and whether the original can still be put back. */
+export interface TestOutcome {
+  chosenKey: string;
+  chosenLabel: string;
+  decidedAt: string;
+  deleteRedundant: boolean;
+  restorable: boolean;
+  restoredAt: string | null;
+}
+
 export interface HeatTopElement {
   selector: string;
   count: number;
