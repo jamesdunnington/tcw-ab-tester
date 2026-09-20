@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { Navigate, NavLink, Route, Routes } from "react-router-dom";
+import { applyTheme, readTheme, type Theme } from "./theme.js";
 import { useAuth } from "./context/AuthContext.js";
 import { LoginPage } from "./pages/Login.js";
 import { SitesPage } from "./pages/Sites.js";
@@ -15,6 +17,13 @@ function RequireAuth({ children }: { children: JSX.Element }) {
 
 export function App() {
   const { user, logout } = useAuth();
+  const [theme, setTheme] = useState<Theme>(readTheme);
+  const dark = theme === "dark";
+  const toggleTheme = () => {
+    const next: Theme = dark ? "light" : "dark";
+    applyTheme(next);
+    setTheme(next);
+  };
 
   return (
     <>
@@ -27,8 +36,11 @@ export function App() {
             <NavLink to="/library">Library</NavLink>
           </nav>
           <nav aria-label="Account" className="small">
-            <span className="muted">{user.email}</span>{" "}
-            <button className="link-button" onClick={() => logout()}>Log out</button>
+            <span className="muted account-email">{user.email}</span>
+            <button type="button" className="link-button theme-toggle" aria-pressed={dark} onClick={toggleTheme}>
+              Dark mode
+            </button>
+            <button type="button" className="link-button" onClick={() => logout()}>Log out</button>
           </nav>
         </header>
       )}

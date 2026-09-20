@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api.js";
+import { openInNewTab } from "../open-tab.js";
 import type { HeatTopElement, HeatmapResponse, Variant } from "../lib/types.js";
 
 type LayerKey = "click" | "hover" | "attention" | "deadClicks" | "rageClicks";
@@ -62,8 +63,7 @@ export function HeatmapPanel({ testId, variants }: { testId: string; variants: V
     setOpening(true);
     setError(null);
     try {
-      const { url } = await api.post<{ url: string }>(`/api/tests/${testId}/heatmap-link`, { variantKey: variant || undefined });
-      window.open(url, "_blank", "noopener");
+      await openInNewTab(async () => (await api.post<{ url: string }>(`/api/tests/${testId}/heatmap-link`, { variantKey: variant || undefined })).url);
     } catch (e) {
       setError(e instanceof Error ? `Could not open the heatmap (${e.message}).` : "Could not open the heatmap.");
     } finally {

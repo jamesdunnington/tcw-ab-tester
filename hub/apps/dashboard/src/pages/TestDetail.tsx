@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../lib/api.js";
+import { openInNewTab } from "../open-tab.js";
 import type { StatsResponse, Test, Variant } from "../lib/types.js";
 import { DecisionPanel } from "../components/DecisionPanel.js";
 import { HeatmapPanel } from "../components/HeatmapPanel.js";
@@ -43,8 +44,7 @@ export function TestDetailPage() {
   async function openEditor(variantKey: string) {
     setError(null);
     try {
-      const { url } = await api.post<{ url: string }>(`/api/tests/${testId}/variants/${variantKey}/editor-link`);
-      window.open(url, "_blank", "noopener");
+      await openInNewTab(async () => (await api.post<{ url: string }>(`/api/tests/${testId}/variants/${variantKey}/editor-link`)).url);
     } catch (err) {
       setError(err instanceof Error ? `Could not open the editor (${err.message}).` : "Could not open the editor.");
     }
