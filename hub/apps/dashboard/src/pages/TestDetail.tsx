@@ -23,9 +23,10 @@ export function TestDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const load = useCallback(() => {
-    if (!testId) return;
-    api
+  // Resolves once the test and its stats are fresh, so an action can keep its buttons disabled until the page shows the new state.
+  const load = useCallback((): Promise<unknown> => {
+    if (!testId) return Promise.resolve();
+    const detail = api
       .get<{ test: Test; variants: Variant[]; outcome: TestOutcome | null }>(`/api/tests/${testId}`)
       .then((res) => {
         setTest(res.test);
@@ -33,15 +34,19 @@ export function TestDetailPage() {
         setOutcome(res.outcome);
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Could not load this test."));
-    api.get<StatsResponse>(`/api/tests/${testId}/stats`).then(setStats).catch(() => setStats(null));
+    const statsReq = api.get<StatsResponse>(`/api/tests/${testId}/stats`).then(setStats).catch(() => setStats(null));
+    return Promise.all([detail, statsReq]);
   }, [testId]);
 
-  useEffect(load, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   // The visual editor saves in another tab; refresh the edit counts when the owner comes back.
   useEffect(() => {
-    window.addEventListener("focus", load);
-    return () => window.removeEventListener("focus", load);
+    const onFocus = () => void load();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
   }, [load]);
 
   async function openEditor(variantKey: string) {
@@ -59,8 +64,8 @@ export function TestDetailPage() {
     setBusy(true);
     try {
       await api.post(`/api/tests/${testId}/${path}`, body);
+      await load();
       setNotice(success);
-      load();
     } catch (err) {
       setError(err instanceof Error ? `${failure} (${err.message})` : failure);
     } finally {
@@ -145,7 +150,7 @@ export function TestDetailPage() {
       )}
 
       {test.status === "archived" && outcome && (
-        <OutcomePanel testId={test.id} isElement={isElement} outcome={outcome} onDone={(msg) => { setNotice(msg); load(); }} />
+        <OutcomePanel testId={test.id} isElement={isElement} outcome={outcome} onDone={(msg) => { setNotice(msg); void load(); }} />
       )}
 
       <h2>Variants</h2>
@@ -217,7 +222,7 @@ export function TestDetailPage() {
             testType={test.type}
             variants={variants}
             recommendedKey={stats?.latest?.winnerKey ?? null}
-            onDone={() => { setNotice("Decision applied. The test is archived."); load(); }}
+            onDone={() => { setNotice("Decision applied. The test is archived."); void load(); }}
           />
         </div>
       )}
