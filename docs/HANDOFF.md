@@ -50,7 +50,7 @@ Logged-in users who can `edit_others_posts` (editors, admins) get no test config
 ## Bugs and gaps found, NOT fixed
 
 - The hub always calls `/wp-json/...`; a site on Plain permalinks fails. Plugin Test Connection should detect and warn.
-- One field does two jobs twice: the site `domain` is both where the hub calls WordPress AND the Origin `/ingest` accepts; the plugin's hub URL is both its server-to-server address and the browser's ingest URL (`class-runtime.php` uses `get_hub_url()`; `HUB_PUBLIC_URL` exists in the API env but is unused for this). Fine in production (same public URL), needs a single hostname in Docker (see below). README's "any domain label is fine for local testing" is wrong and must be corrected.
+- Site `domain` still has one value for two jobs (where the hub calls WordPress, and the Origin `/ingest` accepts), so a split-horizon setup where the hub reaches WordPress by a different name than visitors do cannot work; in Docker use one name (`host.docker.internal`), see README "Which address goes where". Fixed this session: the origin check is now an exact host+port comparison (`hub/apps/api/src/lib/origin.ts`; ignores scheme and `www.`; the old `includes()` let `example.com.evil.test` through and 403'd every visitor when the domain was saved with a trailing slash), `POST /api/sites` normalises the domain (400 `invalid_domain`), and the plugin has an optional "Hub address for visitors" (`tcwab_hub_public_url`, `get_public_hub_url()`) used for the tracking address and the editor/heatmap bundles. A possible future step is a per-site list of extra allowed origins.
 - A control visitor who opens the challenger's URL directly is not sent back to the original; the old variant URL returns 404 after cleanup (no redirect).
 - MySQL's first start outlasts its 50s healthcheck, so the first `up` reports it unhealthy: wait for healthy and run `up -d` again, or add `start_period`/raise `retries`.
 - Worker throughput is about 25 events/s (sequential `handleEntry`); fine for the expected volume, note if bursts matter.
@@ -107,5 +107,5 @@ Facts worth knowing: heat data flows tracker -> `heat.ts` `deriveHeatBins` -> `h
 
 1. Owner checks the Outcome panel in the dashboard (restore is already done on the dev "Sample Page" test, so it shows the restored state).
 2. Owner logs in to wp-admin at the new hostname; walk the element test + editor + goal + winner + permanent rule.
-3. Fix the open bugs (single-hostname domain issue, plain permalinks), then the README domain note, then update this file.
+3. Fix the remaining open bugs (plain permalinks: Test Connection should detect and warn), then update this file.
 4. Run `npm run ci:local` and the Docker build again, commit, and ask the owner before any push or deploy.
