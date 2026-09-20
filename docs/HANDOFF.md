@@ -5,7 +5,7 @@ Repo: https://github.com/jamesdunnington/tcw-ab-tester (public, default branch *
 
 ## 1. Where things stand (2026-09-20)
 
-The product is feature-complete: all five phases plus the Claude Desktop connector (`docs/MCP-PLAN.md`). It has been run for real against a local WordPress and works end to end. **Nothing is deployed.** The remaining work is a few small gaps and the production rollout (section 5).
+The product is feature-complete: all five phases plus the Claude Desktop connector (`docs/MCP-PLAN.md`). It has been run for real against a local WordPress and works end to end. **It is deployed** (2026-09-20) on the owner's VPS at `https://test.thecontentwarrior.work`, with the connector at `https://mcptest.thecontentwarrior.work/mcp`, three WordPress sites connected (createondot.com, homedesigninsider.com, contentnetworkinsider.com, plugin 0.2.0). See section 8 for how the VPS is run. The remaining work is the off-server backup destination and a few small gaps (section 4).
 
 **Git:** pushed to GitHub on 2026-09-20 (through `a4b3274`, after `npm run ci:local` and a production image build passed). The owner treats a push as a formal production copy: push only when asked, after `npm run ci:local` passes. Commits since the previous push (`1f71dd5`), newest first (the Plain-permalink warning and the `.table-wrap` fix are also in that range):
 
@@ -36,8 +36,9 @@ Production hostnames for later: hub `https://test.thecontentwarrior.work`, MCP `
 
 ## 3. Not yet tested
 
-- **Claude Desktop connector** end to end (needs public HTTPS, so only after deploy).
-- **VPS deploy**, and **backup + restore** (take one backup by hand and test a restore before trusting it).
+- **Connector:** connected and working for read tools (list_sites, list_tests, audit entry `mcp.authorized`). The Draft tools, the Start/stop/decide scope and Claude Desktop's per-call approval prompts have NOT been exercised on the real server.
+- **Consent:** verified once each way on a real AdSense (IAB TCF) banner from an EU/UK VPN (reject = 0 rows, accept = events). Partial choices ("Manage options") and a repeat reject are untested; Mediavine's banner was never seen.
+- **Backup:** one dump was restored into a scratch database and all 16 tables matched (2026-09-20). NOT done: an off-server destination (`TCW_BACKUP_REMOTE` is unset, so dumps exist only on the VPS), and running the hub against a restored database.
 - The overlay's Close button and the hover / rage-click / dead-click layers were not exercised (the simulator sends no such events); no automated browser test exists for hover, permanent rules or the heatmap overlay.
 - The Login page was not checked visually after the restyle. Library was checked at 375px (no sideways scroll, no small targets). The Outcome panel was checked at 360px in light and dark: fits, 44px button; a page-level sideways scroll caused by an unclipped visually-hidden span in table cells was fixed with `position: relative` on `.table-wrap`.
 
@@ -55,8 +56,11 @@ Production hostnames for later: hub `https://test.thecontentwarrior.work`, MCP `
 
 ## 5. Suggested order for the next session
 
-1. Run `npm run ci:local` and the Docker build once more, commit, then **ask the owner** before any push or deploy.
-2. Deployment, in this order: DNS for `test.` and `mcptest.`; `hub/.env` (see `hub/.env.example`: `HUB_DOMAIN`, `MCP_DOMAIN`, optional `SMTP_URL`, `BACKUP_REMOTE` + `RCLONE_CONFIG_OFFSITE_*`); bring the stack up; connect the WordPress plugins with Hub URL `https://<HUB_DOMAIN>`; verify the connector in Claude Desktop (Settings > Connectors > Add custom connector > `https://mcptest.thecontentwarrior.work/mcp`; check `ALLOWED_REDIRECT_HOSTS` in `hub/apps/mcp/src/oauth/provider.ts`, token refresh, tool approval prompts); one manual backup and a test restore.
+1. Set the off-server backup destination (`TCW_BACKUP_REMOTE` + `TCW_RCLONE_*` in `~/n8n/.env`, owner enters the keys), run one manual backup, confirm the file is in the bucket.
+2. Exercise the connector's Draft tools from Claude Desktop (draft an element test, see it as a draft in the dashboard, remove it with Delete draft); decide whether to ever grant the live scope.
+3. Repeat the consent reject test, and test a "Manage options" partial choice.
+4. Run a real test to the gates (200 sessions per arm and 7 days). Note the three tests so far were ended early by the owner (`test.decided`), so no winner has been produced from real traffic yet.
+5. Known gaps in section 4 (plain-permalink fallback, dead-letter alert, ad revenue).
 
 ## 6. Behaviour worth knowing (decisions made, do not undo by accident)
 
@@ -84,6 +88,10 @@ Owner's standing rules for UI work: use the `frontend-design-pro` skill for the 
 - **Dev data now:** three tests: an archived page test ("Sample Page", original restored), an archived element test (permanent change removed), and a stopped element test ("Bugfix check" headline, inconclusive). Scratch draft pages titled "SCRATCH ..." exist in WordPress and can be deleted.
 - **Owner accounts:** a hub admin (`cshnyt@gmail.com`) and a WordPress admin. **The agent must never create accounts or type passwords**: the owner logs in themself, in their own Chrome (Claude in Chrome tools), then the agent can drive the pages.
 - **Traffic simulator:** `dev/simulator/sim.mjs` posts synthetic visitors to the real `/ingest`: `SITE_KEY=... TEST_ID=... N=120 [ELEMENT=1] node dev/simulator/sim.mjs` (`ELEMENT=1` for element tests; rate limit 300 requests per 5 min per IP). To reach the winner gates fast: backdate `tests.started_at` 8 days in Postgres, send about 220+ visitors per arm (two runs, 5 minutes apart), then "Recompute now".
+- **Production VPS (ssh alias `thecontentwarrior`, key auth, works from this PC):** the hub runs inside the owner's existing stack in `~/n8n` (`docker-compose.yml`, `.env`, `Caddyfile`), which also runs n8n, Postiz, Keila and Daybook behind one shared Caddy on `postiz-network`. Hub services are prefixed `tcw-` (`tcw-postgres`, `tcw-redis`, `tcw-api`, `tcw-worker`, `tcw-mcp`, `tcw-dashboard`, `tcw-backup`) and use `TCW_`-prefixed env vars (`TCW_POSTGRES_PASSWORD`, `TCW_SESSION_SECRET`, `TCW_SECRET_ENCRYPTION_KEY`; keep a copy of the last outside the VPS). Images come from `ghcr.io/jamesdunnington/tcw-ab-tester-{api,worker,mcp,dashboard,backup}:latest`. DNS is proxied by Cloudflare (a 525 there means Caddy had not loaded the new blocks). Caddyfile blocks must be multi-line (one-line `{ ... }` blocks are a syntax error); append with `cat >>`, not `sed -i`, because the container mounts the file. Deploy an update: push to master, wait for CI then the automatic "Publish images" run, then on the VPS `docker compose pull tcw-api tcw-worker tcw-mcp tcw-dashboard tcw-backup && docker compose up -d tcw-api tcw-worker tcw-mcp tcw-dashboard tcw-backup`. Over SSH only read and check; `docker compose exec` reads stdin, so run scripts from a file with `</dev/null`.
+- **CI/CD:** `.github/workflows/ci.yml` runs on every push; `publish-images.yml` runs after CI succeeds on master (also manual, and on `v*` tags) and pushes the five images. A transient registry 502 can fail single jobs: `gh run rerun <id> --failed`.
+- **Plugin zip:** none is committed; build it with Python `zipfile` from `wp-plugin/tcw-ab-tester` (forward slashes, folder at the top) into the ignored `dist/` folder, named `tcw-ab-tester-<version>.zip`. Version is set in two places in `tcw-ab-tester.php` and doubles as the cache-buster for `assets/tracker.js`.
+- **Login page:** "First-time setup" is shown only while the hub has no user (`GET /api/auth/setup-open`); the server refuses account creation once a user exists (403). The hub is private: keep it that way.
 - **Install everything inside the project** (npm workspaces); nothing global. Scratch scripts go in the session scratchpad (Git Bash `/tmp` is not the same place as the scratchpad).
 - **Stale `dist`:** other workspaces import `@tcw/shared`, `@tcw/db`, `@tcw/stats`, `@tcw/core` from built `dist`; rebuild after changing one (`npm run build -w @tcw/<name>`). `npm run ci:local` builds everything and runs all tests. After changing `packages/tracker`, run `npm run tracker:build` (copies bundles to the API `public` and to the plugin `assets`, which is committed).
 - **Tooling quirks:** the GateGuard hook refuses the first Write/Edit of each file per session and asks for importers, affected API, data shape and the verbatim instruction: state them, then retry the identical call (Bash edits bypass it). Recursive forced deletes and `git checkout --` need the same kind of statement. Foreground `sleep` is blocked: use a background command or a Monitor. Heredocs mangle long content: use Write/Edit for anything with escapes. Files check out with CRLF. **Encoding:** `README.md` and this file are UTF-8; when patching with Python always pass `encoding='utf-8'` (a default-encoding write once emptied the README; it was restored from git).
