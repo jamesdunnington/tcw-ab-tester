@@ -7,7 +7,7 @@ Repo: https://github.com/jamesdunnington/tcw-ab-tester (public, default branch *
 
 The product is feature-complete: all five phases plus the Claude Desktop connector (`docs/MCP-PLAN.md`). It has been run for real against a local WordPress and works end to end. **Nothing is deployed.** The remaining work is a few small gaps and the production rollout (section 5).
 
-**Git:** the last commit on GitHub is `1f71dd5`. Everything after it is committed locally and **NOT pushed**. The owner treats a push as a formal production copy: push only when asked, after `npm run ci:local` passes. Local commits since then, newest first:
+**Git:** pushed to GitHub on 2026-09-20 (through `a4b3274`, after `npm run ci:local` and a production image build passed). The owner treats a push as a formal production copy: push only when asked, after `npm run ci:local` passes. Commits since the previous push (`1f71dd5`), newest first (the Plain-permalink warning and the `.table-wrap` fix are also in that range):
 
 | Commit | What |
 |---|---|
