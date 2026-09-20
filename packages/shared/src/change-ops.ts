@@ -10,12 +10,19 @@ import { z } from "zod";
  * change breaks the selector; the runtime ignores it, the editor uses it.
  */
 
+/**
+ * AdSense and Mediavine place ads by script inside the page. Their policies forbid changing or hiding an ad
+ * container, so an op aimed at one is refused. Matches a selector's text, so it catches the common ad classes and ids.
+ */
+export const AD_SLOT_PATTERN = /adsbygoogle|google_ads|google-auto-placed|googlesyndication|doubleclick|mv-ads|mv_slot|mediavine|mv-video/i;
+
 /** Single, non-empty selector. Comma lists are rejected so one bad op can't hide the wrong elements. */
 const selector = z
   .string()
   .min(1)
   .max(500)
-  .refine((s) => !s.includes(",") && !/[{};]/.test(s), "selector must be a single CSS selector");
+  .refine((s) => !s.includes(",") && !/[{};]/.test(s), "selector must be a single CSS selector")
+  .refine((s) => !AD_SLOT_PATTERN.test(s), "selector targets an ad container, which ad networks do not allow to be changed");
 
 const fingerprint = z
   .object({ tag: z.string().max(32), text: z.string().max(120), index: z.number().int().min(0) })

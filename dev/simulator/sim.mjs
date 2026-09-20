@@ -7,13 +7,15 @@ const ORIGIN = "http://host.docker.internal:8080";
 const SITE_KEY = process.env.SITE_KEY;
 const TEST_ID = process.env.TEST_ID;
 const N = Number(process.env.N ?? 120);
+// ELEMENT=1: an element test has one URL for both arms, so the challenger does not get its own page.
+const ELEMENT = process.env.ELEMENT === "1";
 
 let seed = 42;
 const rand = () => ((seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296);
 
 const profile = {
   a: { click: 0.1, scroll: [15, 65], beats: [1, 5], url: `${ORIGIN}/sample-page/` },
-  b: { click: 0.22, scroll: [35, 95], beats: [2, 8], url: `${ORIGIN}/sample-page-2/` },
+  b: { click: 0.22, scroll: [35, 95], beats: [2, 8], url: ELEMENT ? `${ORIGIN}/sample-page/` : `${ORIGIN}/sample-page-2/` },
 };
 
 let stored = 0;

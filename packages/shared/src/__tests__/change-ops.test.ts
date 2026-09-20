@@ -12,6 +12,14 @@ describe("changeOpSchema", () => {
     expect(ok({ op: "hide", selector: "#a", fp: { tag: "a", text: "Buy", index: 0 } })).toBe(true);
   });
 
+  it("refuses selectors that target AdSense or Mediavine containers", () => {
+    expect(ok({ op: "hide", selector: "ins.adsbygoogle" })).toBe(false);
+    expect(ok({ op: "text", selector: "#google_ads_iframe_/123/x_0" })).toBe(false);
+    expect(ok({ op: "hide", selector: "div.mv-ads > div" })).toBe(false);
+    expect(ok({ op: "style", selector: "#mediavine-slot-1", styles: { color: "red" } })).toBe(false);
+    expect(ok({ op: "text", selector: "h1.wp-block-post-title", value: "Fine" })).toBe(true);
+  });
+
   it("rejects selector lists and rule-breaking characters", () => {
     expect(ok({ op: "hide", selector: "#a, #b" })).toBe(false);
     expect(ok({ op: "hide", selector: "#a{color:red}" })).toBe(false);

@@ -103,6 +103,11 @@ function setCookie(name: string, value: string, days: number): void {
   document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
 }
 
+/** The challenger URL with the visitor's query and hash carried over: dropping the ad click id and utm_* breaks attribution for challenger visitors only. */
+export function redirectTarget(url: string, search: string, hash: string): string {
+  return url + (url.indexOf("?") === -1 ? search : search.replace("?", "&")) + hash;
+}
+
 function deviceClass(): "desktop" | "tablet" | "mobile" {
   const w = window.innerWidth;
   if (w < 768) return "mobile";
@@ -152,7 +157,7 @@ function pickVariant(visitorId: string, test: TcwabTestConfig): TcwabVariantConf
     }
 
     if (!variant.isControl && variant.redirectUrl && location.href.indexOf(variant.redirectUrl) === -1) {
-      location.replace(variant.redirectUrl);
+      location.replace(redirectTarget(variant.redirectUrl, location.search, location.hash));
       return; // one redirect per page load is enough; the new load re-runs this script
     }
 

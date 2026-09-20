@@ -37,11 +37,15 @@ export function createPicker(
     "position:fixed;display:none;box-sizing:border-box;border:2px solid #2563eb;background:rgba(37,99,235,.12);pointer-events:none;";
   overlay.root.appendChild(box);
 
+  // Keep in step with AD_SLOT_PATTERN in @tcw/shared (the editor bundle does not import values from it).
+  const AD_SLOT = 'ins.adsbygoogle,[id^="google_ads"],[class*="google-auto-placed"],[id*="mediavine"],[class*="mv-ads"],[class*="mv_slot"],[class*="mv-video"],iframe[src*="doubleclick"],iframe[src*="googlesyndication"]';
+  const inAd = (t: Element) => t.closest(AD_SLOT) !== null;
+
   const isEditorUi = (t: EventTarget | null) => t instanceof Node && overlay.host.contains(t);
 
   function onMove(e: MouseEvent): void {
     const t = e.target;
-    if (!(t instanceof Element) || isEditorUi(t) || t === doc.documentElement || t === doc.body) {
+    if (!(t instanceof Element) || isEditorUi(t) || inAd(t) || t === doc.documentElement || t === doc.body) {
       box.style.display = "none";
       return;
     }
@@ -56,6 +60,8 @@ export function createPicker(
     e.preventDefault();
     e.stopPropagation();
     e.stopImmediatePropagation();
+    // The click above is already swallowed, so the owner cannot click their own ad by accident. Ads are not editable.
+    if (inAd(t)) return;
     onPick(t);
   }
 
