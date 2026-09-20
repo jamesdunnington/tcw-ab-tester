@@ -129,12 +129,13 @@ class TCWAB_Runtime {
 	/**
 	 * What to assume when no consent tool has answered. This is the ONLY consent value decided on the
 	 * server, and it is the same for every visitor, so it is safe inside a cached page. The real answer
-	 * is read in the visitor's browser (packages/tracker/src/consent.ts): WP Consent API, Complianz and
-	 * CookieYes. Defaults to "no consent" (functional-only assignment, no tracking events) per docs/PLAN.md
-	 * section 3; a site with no consent tool at all can opt in with the tcwab_default_consent filter.
+	 * is read in the visitor's browser (packages/tracker/src/consent.ts): an IAB TCF banner (AdSense,
+	 * Mediavine), WP Consent API, Complianz and CookieYes. If none of them has answered (for example a
+	 * visitor outside the regions where a banner is shown) the visitor is tracked: the owner's decision,
+	 * 2026-09-20. A site that wants the stricter behaviour returns false from the tcwab_default_consent filter.
 	 */
 	private function default_consent(): bool {
-		return (bool) apply_filters('tcwab_default_consent', false);
+		return (bool) apply_filters('tcwab_default_consent', true);
 	}
 
 	/** Strict mode: everyone sees the original, unassigned and untracked, until statistics consent is given. */

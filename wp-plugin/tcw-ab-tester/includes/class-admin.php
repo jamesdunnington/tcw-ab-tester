@@ -123,7 +123,7 @@ class TCWAB_Admin {
 								<?php esc_html_e('Strict mode: show everyone the original page until they accept statistics cookies', 'tcw-ab-tester'); ?>
 							</label>
 							<p class="description">
-								<?php esc_html_e('Statistics consent is read live in each visitor browser from the WP Consent API, Complianz or CookieYes. Without a consent tool nothing is tracked. In the default mode visitors are still split between versions with a functional cookie, but no engagement events are recorded until they consent.', 'tcw-ab-tester'); ?>
+								<?php esc_html_e('Statistics consent is read live in each visitor browser from the consent banner (AdSense or Mediavine, the WP Consent API, Complianz or CookieYes). If a banner is present its answer is followed: no engagement events are recorded until the visitor consents. If no banner is present (for example a visitor outside the regions where one is shown) the visitor is tracked.', 'tcw-ab-tester'); ?>
 							</p>
 						</td>
 					</tr>
