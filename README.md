@@ -7,7 +7,7 @@ own VPS; the WordPress plugin is a thin, HMAC-signed bridge to it.
 
 Full design: [docs/PLAN.md](docs/PLAN.md).
 
-## Status: Phases 1 to 3 built, plus the Claude Desktop connector
+## Status: all five phases built, plus the Claude Desktop connector
 
 Working end to end: connect a site to the hub, create a page/post split
 test, the plugin duplicates the post on WordPress, the hub pushes the live
@@ -32,12 +32,30 @@ tests (as drafts), read results and detailed analytics, explain the findings,
 and, only if you grant it and confirm in chat, start tests or apply winners.
 See "Connect Claude Desktop" below.
 
-**Known gaps** (see [docs/PLAN.md](docs/PLAN.md) §11): the Engagement Score
-uses 4 of the plan's 5 components (the fifth needs phase-4 tracking); SEO-plugin
-index tables are not purged directly on cleanup; heatmaps (phase 4) and the
-cross-site reuse library (phase 5) are not built yet; **the WordPress plugin has
-never been run inside a real WordPress** (only syntax-checked in CI), so expect
-a shakedown pass on the first install.
+**Heatmaps (phase 4):** the tracker records where clicks land inside each element
+(a selector plus a percent offset, so maps survive responsive layouts), which links
+and buttons get hovered, which sections were actually seen for a second, where
+scrolling pauses, and dead and rage clicks. The worker keeps them forever as
+aggregates. The test page shows the top elements per layer and the scroll drop-off,
+and "View on the live page" paints them over the real page (a read-only overlay,
+same signed-link and WordPress-login gate as the editor). Claude reads them with
+`get_heatmap`. "Key sections seen" is the fifth Engagement Score component.
+
+**Library, notifications, consent, retention, backups (phase 5):** every decided test
+is kept in a cross-site library (with the page content snapshotted before any copy is
+deleted). Reuse one on another site as a draft test, a draft post, or (winners only,
+confirmed) a permanent change, from the dashboard or through Claude. An email goes out
+once when a winner is found (`SMTP_URL`). Statistics consent is read live in the
+visitor's browser from the WP Consent API, Complianz or CookieYes, with an optional
+strict mode. Raw events are deleted after 90 days (aggregates stay). A backup service
+copies a nightly `pg_dump` off the server (`BACKUP_REMOTE`, any S3-compatible storage).
+
+**Known gaps** (see [docs/PLAN.md](docs/PLAN.md) §11): SEO-plugin index tables are not
+purged directly on cleanup; a permanent rule cannot be removed from the UI yet; raw
+events are pruned by a batched daily delete rather than monthly partitions (fine at
+the planned scale); **the WordPress plugin has never been run inside a real
+WordPress** (only syntax-checked in CI), so expect a shakedown pass on the first
+install.
 
 Run the same checks CI runs (Node parts) with `npm run ci:local`.
 
@@ -48,11 +66,13 @@ hub/apps/api/         Fastify + TypeScript admin API, WP bridge, /ingest
 hub/apps/worker/       Redis Streams consumer -> Postgres (events, rollups)
 hub/apps/mcp/          Claude Desktop connector: remote MCP (Streamable HTTP) + OAuth server
 hub/apps/dashboard/    React + Vite dashboard (all test management + results)
-hub/docker-compose.yml Production stack (Caddy + api + worker + dashboard + postgres + redis)
+hub/docker-compose.yml Production stack (Caddy + api + worker + mcp + dashboard + postgres + redis + backup)
+hub/backup/             Nightly pg_dump -> off-box storage (rclone)
 packages/shared/       Types, zod schemas, the HMAC signing algorithm
 packages/db/           Drizzle ORM schema + client (shared by api, worker & mcp)
 packages/core/          Business logic shared by the api and the connector: tests, winner flow, analytics, page inspector, WP client
 packages/editor/        The visual editor overlay (vanilla TS, Shadow DOM)
+packages/heatmap/       The heatmap overlay painted over the live page (vanilla TS, Shadow DOM)
 packages/tracker/       Browser runtime: the inline assignment script + the full engagement tracker
 wp-plugin/tcw-ab-tester/  The WordPress plugin
 dev/docker-compose.yml Local end-to-end harness: hub (plain HTTP) + WordPress + MySQL
@@ -130,11 +150,30 @@ Every action Claude takes is written to the hub audit log under the connector's
 name. Tokens last an hour and refresh automatically; revoke access by removing
 the connector in Claude. Sign-in attempts are rate limited and failures are logged.
 
+### Email, retention and backups
+
+All optional and set in `hub/.env` (see the comments in `.env.example`):
+
+- `SMTP_URL` (with `MAIL_FROM`, `NOTIFY_EMAIL`): the "winner found" email. Unset = no email.
+- `EVENT_RETENTION_DAYS` (90) and `SNAPSHOT_FULL_DAYS` (30): a daily worker job deletes raw
+  events past the limit and thins old hourly stats snapshots to one per day.
+- `BACKUP_REMOTE` plus the `RCLONE_CONFIG_OFFSITE_*` variables: where the nightly dump goes.
+  Take one now with `docker compose -f hub/docker-compose.yml run --rm backup /usr/local/bin/backup.sh`.
+  Restore into an empty database with
+  `pg_restore --no-owner --clean --if-exists -d "$DATABASE_URL" tcwab-<stamp>.dump`.
+  Test a restore once before you rely on it. Redis (the ingest buffer) is deliberately not backed up.
+
 ## Why some things are built the way they are
 
 A few decisions that aren't obvious from the code alone — see the comments
 at each site for the full reasoning:
 
+- **Consent is decided in the browser, never when WordPress renders the page**
+  (`packages/tracker/src/consent.ts`). The rendered HTML is what a page cache stores, so a
+  server-side answer would freeze the first visitor's choice for everyone. The server only
+  supplies the fallback used when no consent tool has answered.
+- **Heatmap and editor links use different token kinds** (`packages/shared/src/editor-token.ts`):
+  a heatmap token is read-only and cannot save edits, and an editor token cannot read heat data.
 - **Site secrets are encrypted, not hashed** (`hub/apps/api/src/lib/crypto.ts`).
   Verifying an inbound HMAC signature requires recomputing it with the raw
   secret, which a one-way password hash can never provide.

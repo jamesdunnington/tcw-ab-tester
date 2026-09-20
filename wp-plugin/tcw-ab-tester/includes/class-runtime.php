@@ -42,7 +42,8 @@ class TCWAB_Runtime {
 		$config = [
 			'ingestUrl' => $this->hub_client->get_hub_url() . '/ingest',
 			'siteKey'   => $this->hub_client->get_site_key(),
-			'consent'   => $this->has_tracking_consent(),
+			'consent'   => $this->default_consent(),
+			'strict'    => $this->strict_consent(),
 			'tests'     => $active_tests,
 			'rules'     => $rules,
 		];
@@ -104,16 +105,19 @@ class TCWAB_Runtime {
 	}
 
 	/**
-	 * Statistics consent gate. Integrates with the WP Consent API if a
-	 * consent-management plugin (Complianz, CookieYes, etc.) provides it;
-	 * defaults to "no consent" (functional-only assignment, no tracking
-	 * events) if no consent plugin is active, per docs/PLAN.md section 3.
+	 * What to assume when no consent tool has answered. This is the ONLY consent value decided on the
+	 * server, and it is the same for every visitor, so it is safe inside a cached page. The real answer
+	 * is read in the visitor's browser (packages/tracker/src/consent.ts): WP Consent API, Complianz and
+	 * CookieYes. Defaults to "no consent" (functional-only assignment, no tracking events) per docs/PLAN.md
+	 * section 3; a site with no consent tool at all can opt in with the tcwab_default_consent filter.
 	 */
-	private function has_tracking_consent(): bool {
-		if (function_exists('wp_has_consent')) {
-			return wp_has_consent('statistics');
-		}
+	private function default_consent(): bool {
 		return (bool) apply_filters('tcwab_default_consent', false);
+	}
+
+	/** Strict mode: everyone sees the original, unassigned and untracked, until statistics consent is given. */
+	private function strict_consent(): bool {
+		return (bool) apply_filters('tcwab_strict_consent', (bool) get_option('tcwab_strict_consent', false));
 	}
 
 	private function get_runtime_inline_js(): string {

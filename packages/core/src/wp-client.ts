@@ -130,3 +130,36 @@ export interface FinalizeManifest {
 export async function finalizeTest(site: SiteRow, payload: FinalizePayload): Promise<FinalizeManifest> {
   return wpRequest<FinalizeManifest>(site, "POST", "/wp-json/tcwab/v1/finalize", payload);
 }
+
+export interface WpPostSnapshot {
+  id: number;
+  type: "post" | "page";
+  title: string;
+  /** Raw post_content: Gutenberg block markup or classic HTML. */
+  content: string;
+  excerpt: string;
+}
+
+/** The content of a post, taken so a decided test can be reused on another site after its copy is deleted. */
+export async function fetchPostSnapshot(site: SiteRow, wpPostId: number): Promise<WpPostSnapshot> {
+  return wpRequest<WpPostSnapshot>(site, "GET", `/wp-json/tcwab/v1/posts/${wpPostId}/snapshot`);
+}
+
+export interface LibraryDraftResult {
+  postId: number;
+  editUrl: string;
+  permalink: string;
+}
+
+/** Creates a DRAFT post from a library snapshot. Never published, never linked to a test: the owner reviews it first. */
+export async function createLibraryDraft(
+  site: SiteRow,
+  args: { title: string; content: string; excerpt: string; type: "post" | "page"; libraryItemId: string },
+): Promise<LibraryDraftResult> {
+  return wpRequest<LibraryDraftResult>(site, "POST", "/wp-json/tcwab/v1/library/draft", args);
+}
+
+/** Stores a change set as a permanent rule on one post (served to everyone, no tracking), without a test. */
+export async function pushPermanentRule(site: SiteRow, args: { ruleId: string; postId: number; ops: ChangeOp[] }): Promise<{ ok: boolean }> {
+  return wpRequest<{ ok: boolean }>(site, "POST", "/wp-json/tcwab/v1/rules", args);
+}

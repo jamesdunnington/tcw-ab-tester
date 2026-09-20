@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { decisionInputSchema } from "@tcw/shared";
-import { applyDecision, startTest, stopTest } from "@tcw/core";
+import { applyDecision, applyLibraryItem, startTest, stopTest } from "@tcw/core";
 import { actorFor, audit, contextOf, fromService, requireScope } from "./common.js";
 
 /**
@@ -63,6 +63,29 @@ export function registerLiveTools(server: McpServer): void {
       if (denied) return denied;
       const result = await applyDecision(testId, { chosenVariantKey, deleteRedundant, reason }, await actorFor(ctx));
       return fromService(result, (d) => ({ decided: true, chosenVariantKey, deleteRedundant, manifest: d.manifest }));
+    },
+  );
+
+  server.registerTool(
+    "apply_library_change_permanently",
+    {
+      title: "Make a proven library change permanent (changes the live site)",
+      description:
+        "Takes a winning element change from the library and makes it permanent on a post of another site, for every visitor, with no test and no tracking. Only winning changes qualify. Audiences differ between sites, so prefer apply_library_item, which starts a proper test there. ASK THE USER FIRST and only call after they clearly say yes.",
+      inputSchema: { itemId: z.string().uuid(), targetSiteId: z.string().uuid(), wpPostId: z.number().int().positive(), confirm: CONFIRM },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    },
+    async ({ itemId, targetSiteId, wpPostId }, extra) => {
+      const ctx = contextOf(extra.authInfo);
+      const denied = requireScope(ctx, "hub:live");
+      if (denied) return denied;
+      try {
+        const result = await applyLibraryItem(itemId, { targetSiteId, wpPostId, mode: "permanent" });
+        if (result.ok) await audit(ctx, "mcp.library_applied_permanently", itemId, { targetSiteId, wpPostId });
+        return fromService(result);
+      } catch (err) {
+        return fromService({ ok: false as const, status: 502, error: "target_site_unreachable", detail: err instanceof Error ? err.message : String(err) });
+      }
     },
   );
 }

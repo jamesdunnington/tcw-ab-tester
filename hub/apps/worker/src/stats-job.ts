@@ -1,11 +1,21 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { events, pageviews, statsSnapshots, tests, variants } from "@tcw/db";
 import { decideWinner, type WinnerDecision } from "@tcw/stats";
+import nodemailer from "nodemailer";
 import { db } from "./db.js";
+import { env } from "./env.js";
+import { notifyWinnerFound, type MailTransport } from "./notify.js";
 import { buildVariantData } from "./stats-input.js";
 
 /** Statuses in which a test is still live and its stats are still being refreshed. */
 const LIVE_STATUSES = ["running", "winner_found", "inconclusive"] as const;
+
+let transport: MailTransport | null | undefined;
+/** One SMTP transport per process; null when SMTP_URL is unset, which turns email off. */
+function mailTransport(): MailTransport | null {
+  if (transport === undefined) transport = env.SMTP_URL ? nodemailer.createTransport(env.SMTP_URL) : null;
+  return transport;
+}
 
 export async function recomputeTest(testId: string, now = new Date()): Promise<WinnerDecision | null> {
   const [test] = await db.select().from(tests).where(eq(tests.id, testId)).limit(1);
@@ -43,6 +53,10 @@ export async function recomputeTest(testId: string, now = new Date()): Promise<W
   // A test the owner stopped manually (endedAt set) keeps the status they gave it.
   if (decision.status !== test.status && !test.endedAt) {
     await db.update(tests).set({ status: decision.status }).where(eq(tests.id, testId));
+  }
+  // The owner decides; the email only tells them there is something to decide. Once per test.
+  if (decision.status === "winner_found" && !test.endedAt) {
+    await notifyWinnerFound({ db, transport: mailTransport(), config: { from: env.MAIL_FROM, recipients: env.NOTIFY_EMAIL, hubUrl: env.HUB_PUBLIC_URL } }, testId, decision);
   }
   return decision;
 }

@@ -16,6 +16,7 @@
 
 import type { ChangeOp } from "@tcw/shared";
 import { runOps } from "./applier.js";
+import { hasStatisticsConsent } from "./consent.js";
 
 interface TcwabVariantConfig {
   key: string;
@@ -43,7 +44,10 @@ interface TcwabConfig {
    */
   siteKey: string;
   tests: TcwabTestConfig[];
+  /** Fallback when no consent tool has answered; the real answer is read live (see consent.ts). */
   consent: boolean;
+  /** Strict mode: until statistics consent is given, everyone sees the original and nothing is assigned. */
+  strict?: boolean;
 }
 
 export interface TcwabActiveContext {
@@ -121,6 +125,7 @@ function pickVariant(visitorId: string, test: TcwabTestConfig): TcwabVariantConf
   if (!cfg) return;
   if (cfg.rules) for (const r of cfg.rules) runOps(r);
   if (!cfg.tests || cfg.tests.length === 0) return;
+  if (cfg.strict && !hasStatisticsConsent(cfg.consent)) return;
 
   const visitorId = getCookie("tcwab_vid") ?? uuidv4();
   setCookie("tcwab_vid", visitorId, 365);

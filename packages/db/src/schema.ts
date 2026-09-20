@@ -100,6 +100,8 @@ export const tests = pgTable("tests", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   startedAt: timestamp("started_at", { withTimezone: true }),
   endedAt: timestamp("ended_at", { withTimezone: true }),
+  /** Set when the "winner found" email went out, so an hourly recompute never sends it twice. */
+  winnerNotifiedAt: timestamp("winner_notified_at", { withTimezone: true }),
 }, (t) => ({
   siteIdx: index("tests_site_idx").on(t.siteId),
   statusIdx: index("tests_status_idx").on(t.status),
@@ -201,6 +203,41 @@ export const heatBins = pgTable("heat_bins", {
   weight: numeric("weight", { precision: 12, scale: 2 }).notNull().default("0"),
 }, (t) => ({
   binIdx: uniqueIndex("heat_bins_bin_idx").on(t.testId, t.variantId, t.device, t.layer, t.selector, t.cellX, t.cellY),
+}));
+
+/**
+ * The cross-site library (docs/PLAN.md section 10): every decided test is kept here permanently, with
+ * enough to reuse the result on another site after the copy is gone from WordPress. The source test and
+ * site are references that may disappear; the name and domain are copied so the item stays readable.
+ */
+export const libraryItems = pgTable("library_items", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  testId: uuid("test_id").references(() => tests.id, { onDelete: "set null" }),
+  sourceSiteId: uuid("source_site_id").references(() => sites.id, { onDelete: "set null" }),
+  sourceDomain: text("source_domain").notNull(),
+  name: text("name").notNull(),
+  type: testTypeEnum("type").notNull(),
+  wpPostType: wpPostTypeEnum("wp_post_type").notNull().default("page"),
+  tags: jsonb("tags").notNull().default([]),
+  /** "applied_variant" (a change won) or "kept_original" (the original held up). */
+  outcome: text("outcome").notNull(),
+  winnerKey: text("winner_key").notNull(),
+  winnerLabel: text("winner_label").notNull(),
+  /** Lift of the chosen variant over the original, percent, when the stats engine had one. */
+  liftPct: numeric("lift_pct", { precision: 8, scale: 2 }),
+  /** Probability the chosen variant was best at decision time, 0-1. */
+  pBest: numeric("p_best", { precision: 5, scale: 4 }),
+  sessions: integer("sessions").notNull().default(0),
+  /** Element tests: the chosen variant's full change ops (goals included, so it can be re-run as a test). */
+  changeOps: jsonb("change_ops"),
+  /** Page tests: { [variantKey]: { label, isControl, title, content, excerpt } } taken before any copy was deleted. */
+  snapshots: jsonb("snapshots"),
+  /** The final stats snapshot (gates, per-variant analysis) so the numbers outlive the test. */
+  finalStats: jsonb("final_stats"),
+  decidedAt: timestamp("decided_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  testIdx: uniqueIndex("library_items_test_idx").on(t.testId),
+  typeIdx: index("library_items_type_idx").on(t.type),
 }));
 
 export const auditLog = pgTable("audit_log", {

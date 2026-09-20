@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { generateSiteCredentials } from "@tcw/shared";
 import { db } from "../db/client.js";
 import { sites } from "@tcw/db";
-import { encryptSecret } from "@tcw/core";
+import { encryptSecret, findPosts } from "@tcw/core";
 import { requireAuth } from "../lib/session.js";
 
 const createSiteSchema = z.object({
@@ -35,6 +35,19 @@ export async function siteRoutes(app: FastifyInstance): Promise<void> {
   // Credentials are returned in full exactly once, here. The WP plugin admin
   // screen is where they get pasted in; the hub never displays the raw
   // secret again after this response.
+  // Title search on the site itself, so a post can be picked by name (e.g. when reusing a library item).
+  app.get("/api/sites/:id/posts", async (request, reply) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    const { search, limit } = z.object({ search: z.string().min(1).max(120), limit: z.coerce.number().int().min(1).max(25).default(10) }).parse(request.query);
+    const [site] = await db.select().from(sites).where(eq(sites.id, id)).limit(1);
+    if (!site) return reply.code(404).send({ error: "site_not_found" });
+    try {
+      return reply.send(await findPosts(site, search, limit));
+    } catch {
+      return reply.code(502).send({ error: "site_unreachable" });
+    }
+  });
+
   app.post("/api/sites", async (request, reply) => {
     const body = createSiteSchema.parse(request.body);
     const { siteKey, siteSecret } = generateSiteCredentials();

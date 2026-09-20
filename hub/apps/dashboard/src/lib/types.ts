@@ -140,3 +140,39 @@ export interface HeatmapResponse {
     biggestDropAtPct: number | null;
   };
 }
+
+export interface LibraryListItem {
+  id: string;
+  name: string;
+  type: "page" | "element";
+  wpPostType: "post" | "page";
+  tags: string[];
+  outcome: "applied_variant" | "kept_original";
+  winnerLabel: string;
+  liftPct: number | null;
+  pBest: number | null;
+  sessions: number;
+  sourceDomain: string;
+  decidedAt: string;
+  reusable: boolean;
+}
+
+/** GET /api/library/:id: bodies of page snapshots are left out, only titles, excerpts and sizes. */
+export interface LibraryItemDetail extends LibraryListItem {
+  winnerKey: string;
+  changeOps: Array<{ op: string; selector?: string; name?: string; value?: string }> | null;
+  pages: Array<{ key: string; label: string; isControl: boolean; title: string; excerpt: string; contentChars: number }>;
+}
+
+export type LibraryApplyResult =
+  | { kind: "element_test"; testId: string; editorUrl: string | null }
+  | { kind: "permanent_rule"; ruleId: string }
+  | { kind: "draft_post"; postId: number; editUrl: string; permalink: string };
+
+export interface PostSummary {
+  id: number;
+  type: "post" | "page";
+  status: string;
+  title: string;
+  permalink: string;
+}

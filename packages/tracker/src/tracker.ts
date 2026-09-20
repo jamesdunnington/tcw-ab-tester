@@ -9,6 +9,7 @@
 
 import type { TcwabActiveContext } from "./runtime-inline.js";
 import { buildSelector } from "../../editor/src/selector.js";
+import { hasStatisticsConsent } from "./consent.js";
 
 type TrackerEventType =
   | "pageview"
@@ -209,7 +210,8 @@ function main(): void {
 
   function flush(final: boolean): void {
     if (queue.length === 0) return;
-    const consent = contexts.some((c) => c.consent);
+    // Live, not the value baked into the (possibly cached) page: consent may have been given or withdrawn since load.
+    const consent = hasStatisticsConsent(contexts.some((c) => c.consent));
     const batch = { events: queue.splice(0, queue.length), consent };
     const ingestUrl = contexts[0].ingestUrl;
     const siteKey = contexts[0].siteKey;

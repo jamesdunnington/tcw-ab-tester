@@ -77,6 +77,8 @@ async function connect(accessToken: string): Promise<Client> {
 }
 
 let finalizeBody: any = null;
+let draftBody: any = null;
+let ruleBody: any = null;
 const jsonOf = (r: any) => JSON.parse(r.content[0].text);
 
 beforeAll(async () => {
@@ -84,6 +86,21 @@ beforeAll(async () => {
   wp = createServer((req, res) => {
     const url = req.url ?? "";
     const send = (o: unknown) => res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(o));
+    if (url === "/wp-json/tcwab/v1/posts/12/snapshot") return send({ id: 12, type: "page", title: "Home original", content: "<p>original</p>", excerpt: "orig" });
+    if (url === "/wp-json/tcwab/v1/posts/77/snapshot") return send({ id: 77, type: "page", title: "Home B", content: "<p>new hero</p>", excerpt: "b" });
+    if (url.startsWith("/wp-json/tcwab/v1/library/draft") || url.startsWith("/wp-json/tcwab/v1/rules")) {
+      let raw = "";
+      req.on("data", (c) => (raw += c));
+      req.on("end", () => {
+        if (url.includes("/library/draft")) {
+          draftBody = JSON.parse(raw);
+          return send({ postId: 99, editUrl: "http://other/wp-admin/post.php?post=99&action=edit", permalink: "http://other/?p=99" });
+        }
+        ruleBody = JSON.parse(raw);
+        send({ ok: true });
+      });
+      return;
+    }
     if (url.startsWith("/wp-json/tcwab/v1/posts/12")) return send({ id: 12, type: "page", title: "Home", permalink: `http://127.0.0.1:${(wp.address() as AddressInfo).port}/home/`, wordCount: 120 });
     if (url.startsWith("/wp-json/tcwab/v1/posts?")) return send({ posts: [{ id: 12, type: "page", status: "publish", title: "Home", permalink: "x" }] });
     if (url.startsWith("/wp-json/tcwab/v1/config")) return send({ ok: true });
@@ -369,6 +386,69 @@ describe("OAuth flow", () => {
       expect(row.status).toBe("archived");
       const decided = await db.select().from(schema.auditLog).where(eq(schema.auditLog.action, "test.decided"));
       expect(decided[0].actor).toBe("mcp:E2E Claude:admin@test.dev");
+      await client.close();
+    });
+
+    it("keeps every decided test in the library, and reuses it on a site as a draft or (with the live grant) permanently", async () => {
+      const { tokens } = await tokenFor(clientId, ["hub:read", "hub:draft", "hub:live"]);
+      const client = await connect(tokens.access_token);
+
+      const items = jsonOf(await client.callTool({ name: "list_library", arguments: { type: "element" } }));
+      expect(items).toHaveLength(1);
+      expect(items[0]).toMatchObject({ outcome: "applied_variant", winnerLabel: "B (variant)", reusable: true });
+      expect(items[0].tags).toEqual(expect.arrayContaining(["element", "copy"]));
+      expect(jsonOf(await client.callTool({ name: "list_library", arguments: { tag: "copy" } }))).toHaveLength(1);
+      expect(jsonOf(await client.callTool({ name: "list_library", arguments: { tag: "nope" } }))).toHaveLength(0);
+      expect(jsonOf(await client.callTool({ name: "list_library", arguments: { query: "zzzz" } }))).toHaveLength(0);
+
+      const full = jsonOf(await client.callTool({ name: "get_library_item", arguments: { itemId: items[0].id } }));
+      expect(full.changeOps).toEqual(expect.arrayContaining([{ op: "text", selector: "#cta", value: "Start free" }, { op: "goal", selector: "#cta", name: "buy" }]));
+
+      // Draft reuse: a new draft element test with the change loaded, on another page. Nothing is live.
+      const reused = jsonOf(await client.callTool({ name: "apply_library_item", arguments: { itemId: items[0].id, targetSiteId: ids.site, wpPostId: 12 } }));
+      expect(reused.kind).toBe("element_test");
+      expect(new URL(reused.editorUrl).searchParams.get("tcwab_editor")).toBeTruthy();
+      const [copy] = await db.select().from(schema.tests).where(eq(schema.tests.id, reused.testId));
+      expect(copy).toMatchObject({ status: "draft", type: "element", name: expect.stringContaining("from library") });
+      const copyVariants = await db.select().from(schema.variants).where(eq(schema.variants.testId, reused.testId));
+      expect(copyVariants.find((v: any) => !v.isControl).changeOps).toEqual(full.changeOps);
+
+      const missingPost: any = await client.callTool({ name: "apply_library_item", arguments: { itemId: items[0].id, targetSiteId: ids.site } });
+      expect(missingPost.isError).toBe(true);
+      expect(missingPost.content[0].text).toContain("wp_post_id_required");
+
+      // Permanent reuse needs confirm and is a winners-only, goals-stripped rule.
+      const unconfirmed: any = await client.callTool({ name: "apply_library_change_permanently", arguments: { itemId: items[0].id, targetSiteId: ids.site, wpPostId: 12 } }).catch((e) => ({ isError: true, content: [{ text: String(e) }] }));
+      expect(unconfirmed.isError).toBe(true);
+      const permanent = jsonOf(await client.callTool({ name: "apply_library_change_permanently", arguments: { itemId: items[0].id, targetSiteId: ids.site, wpPostId: 12, confirm: true } }));
+      expect(permanent.kind).toBe("permanent_rule");
+      expect(ruleBody).toMatchObject({ postId: 12, ops: [{ op: "text", selector: "#cta", value: "Start free" }] });
+      expect(ruleBody.ruleId).toContain(items[0].id);
+      const logged = await db.select().from(schema.auditLog).where(eq(schema.auditLog.action, "mcp.library_applied_permanently"));
+      expect(logged[0].actor).toBe("mcp:E2E Claude:admin@test.dev");
+      await client.close();
+    });
+
+    it("snapshots a page test's variants before cleanup and can push the winning content to another site as a draft", async () => {
+      const { tokens } = await tokenFor(clientId, ["hub:read", "hub:draft", "hub:live"]);
+      const client = await connect(tokens.access_token);
+      const [t] = await db.insert(schema.tests).values({ siteId: ids.site, name: "Pricing page", type: "page", status: "inconclusive", wpPostId: 12, wpPermalink: "http://127.0.0.1:1/p/", startedAt: new Date(Date.now() - 9 * 86_400_000) }).returning();
+      await db.insert(schema.variants).values([
+        { testId: t.id, key: "a", label: "A (original)", isControl: true, trafficWeight: 50 },
+        { testId: t.id, key: "b", label: "B (variant)", isControl: false, trafficWeight: 50, wpPostId: 77 },
+      ]);
+      const applied = jsonOf(await client.callTool({ name: "apply_winner", arguments: { testId: t.id, chosenVariantKey: "b", deleteRedundant: true, confirm: true } }));
+      expect(applied.decided).toBe(true);
+
+      const [item] = jsonOf(await client.callTool({ name: "list_library", arguments: { type: "page" } }));
+      expect(item).toMatchObject({ name: "Pricing page", outcome: "applied_variant", reusable: true });
+      const full = jsonOf(await client.callTool({ name: "get_library_item", arguments: { itemId: item.id } }));
+      expect(full.pages.map((p: any) => [p.key, p.title])).toEqual(expect.arrayContaining([["a", "Home original"], ["b", "Home B"]]));
+      expect(JSON.stringify(full)).not.toContain("<p>new hero</p>"); // bodies are not dumped into the conversation
+
+      const draft = jsonOf(await client.callTool({ name: "apply_library_item", arguments: { itemId: item.id, targetSiteId: ids.site } }));
+      expect(draft).toMatchObject({ kind: "draft_post", postId: 99 });
+      expect(draftBody).toMatchObject({ title: "Home B", content: "<p>new hero</p>", type: "page", libraryItemId: item.id });
       await client.close();
     });
   });

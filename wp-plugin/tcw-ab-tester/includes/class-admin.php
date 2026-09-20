@@ -44,6 +44,7 @@ class TCWAB_Admin {
 		$site_secret = isset($_POST['tcwab_site_secret']) ? sanitize_text_field(wp_unslash($_POST['tcwab_site_secret'])) : '';
 
 		$this->hub_client->save_settings($hub_url, $site_key, $site_secret);
+		update_option('tcwab_strict_consent', isset($_POST['tcwab_strict_consent']) ? 1 : 0, false);
 
 		add_action('admin_notices', function () {
 			echo '<div class="notice notice-success is-dismissible"><p>' .
@@ -90,6 +91,18 @@ class TCWAB_Admin {
 							<input type="password" id="tcwab_site_secret" name="tcwab_site_secret" class="regular-text"
 								placeholder="<?php echo $this->hub_client->is_configured() ? esc_attr__('•••••••• (unchanged)', 'tcw-ab-tester') : ''; ?>" />
 							<p class="description"><?php esc_html_e('Shown once when the site is created on the hub. Leave blank to keep the current secret.', 'tcw-ab-tester'); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e('Consent', 'tcw-ab-tester'); ?></th>
+						<td>
+							<label for="tcwab_strict_consent">
+								<input type="checkbox" id="tcwab_strict_consent" name="tcwab_strict_consent" value="1" <?php checked((bool) get_option('tcwab_strict_consent', false)); ?> />
+								<?php esc_html_e('Strict mode: show everyone the original page until they accept statistics cookies', 'tcw-ab-tester'); ?>
+							</label>
+							<p class="description">
+								<?php esc_html_e('Statistics consent is read live in each visitor browser from the WP Consent API, Complianz or CookieYes. Without a consent tool nothing is tracked. In the default mode visitors are still split between versions with a functional cookie, but no engagement events are recorded until they consent.', 'tcw-ab-tester'); ?>
+							</p>
 						</td>
 					</tr>
 				</table>

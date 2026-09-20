@@ -8,5 +8,6 @@ export * from "./services/tests.js";
 export * from "./services/decision.js";
 export * from "./services/analytics.js";
 export * from "./services/heatmap.js";
+export * from "./services/library.js";
 export * from "./services/inspect.js";
 export * from "./password.js";

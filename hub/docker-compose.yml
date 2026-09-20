@@ -65,6 +65,13 @@ services:
       NODE_ENV: production
       DATABASE_URL: postgres://${POSTGRES_USER:-tcwab}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-tcwab}
       REDIS_URL: redis://redis:6379
+      HUB_PUBLIC_URL: ${HUB_PUBLIC_URL:?set HUB_PUBLIC_URL in hub/.env}
+      # "Winner found" emails: unset SMTP_URL and nothing is sent.
+      SMTP_URL: ${SMTP_URL:-}
+      MAIL_FROM: ${MAIL_FROM:-TCW A/B Tester <no-reply@localhost>}
+      NOTIFY_EMAIL: ${NOTIFY_EMAIL:-}
+      EVENT_RETENTION_DAYS: ${EVENT_RETENTION_DAYS:-90}
+      SNAPSHOT_FULL_DAYS: ${SNAPSHOT_FULL_DAYS:-30}
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -87,6 +94,30 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       api: { condition: service_started } # api runs migrations on boot; the OAuth tables come from there
+
+  # Nightly pg_dump copied off this server. See hub/backup/ and the BACKUP_* settings in hub/.env.example.
+  backup:
+    build:
+      context: ..
+      dockerfile: hub/backup/Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-tcwab}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-tcwab}
+      BACKUP_CRON: ${BACKUP_CRON:-17 3 * * *}
+      BACKUP_REMOTE: ${BACKUP_REMOTE:-}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-30}
+      BACKUP_LOCAL_KEEP_DAYS: ${BACKUP_LOCAL_KEEP_DAYS:-7}
+      TZ: ${TZ:-UTC}
+      # rclone reads its remote from RCLONE_CONFIG_<NAME>_* variables (see hub/.env.example); passed through as set.
+      RCLONE_CONFIG_OFFSITE_TYPE: ${RCLONE_CONFIG_OFFSITE_TYPE:-}
+      RCLONE_CONFIG_OFFSITE_PROVIDER: ${RCLONE_CONFIG_OFFSITE_PROVIDER:-}
+      RCLONE_CONFIG_OFFSITE_ENDPOINT: ${RCLONE_CONFIG_OFFSITE_ENDPOINT:-}
+      RCLONE_CONFIG_OFFSITE_ACCESS_KEY_ID: ${RCLONE_CONFIG_OFFSITE_ACCESS_KEY_ID:-}
+      RCLONE_CONFIG_OFFSITE_SECRET_ACCESS_KEY: ${RCLONE_CONFIG_OFFSITE_SECRET_ACCESS_KEY:-}
+    volumes:
+      - backup_data:/backups
+    depends_on:
+      postgres: { condition: service_healthy }
 
   dashboard:
     build:
@@ -114,6 +145,7 @@ services:
 
 volumes:
   pg_data:
+  backup_data:
   redis_data:
   caddy_data:
   caddy_config:

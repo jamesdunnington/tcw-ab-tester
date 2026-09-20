@@ -3,7 +3,7 @@ import { and, eq, type SQL } from "drizzle-orm";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { changeOpsSchema } from "@tcw/shared";
 import { sites, tests, variants } from "@tcw/db";
-import { findPosts, getAnalytics, getHeatmap, getResults, getStats, inspectPage } from "@tcw/core";
+import { describeLibraryItem, findPosts, getAnalytics, getHeatmap, getLibraryItem, getResults, getStats, inspectPage, listLibrary } from "@tcw/core";
 import { getDb } from "@tcw/core";
 import { env } from "../env.js";
 import { contextOf, fromService, problem, requireScope, text } from "./common.js";
@@ -111,6 +111,43 @@ export function registerReadTools(server: McpServer): void {
       const denied = requireScope(contextOf(extra.authInfo), "hub:read");
       if (denied) return denied;
       return fromService(await getHeatmap(testId, { variantKey, device }));
+    },
+  );
+
+  server.registerTool(
+    "list_library",
+    {
+      title: "Browse the library of past results",
+      description:
+        "Every decided test is kept in the cross-site library, whichever site it ran on: what changed, whether it won, the lift and confidence, and tags. Filter by type (page or element), tag, text in the name, or a minimum lift. Use it before proposing a new test: something that won on one site is a strong candidate for another (audiences differ, so re-test rather than assume).",
+      inputSchema: {
+        type: z.enum(["page", "element"]).optional(),
+        tag: z.string().max(40).optional(),
+        query: z.string().max(120).optional(),
+        minLiftPct: z.number().optional(),
+      },
+      annotations: READ,
+    },
+    async ({ type, tag, query, minLiftPct }, extra) => {
+      const denied = requireScope(contextOf(extra.authInfo), "hub:read");
+      if (denied) return denied;
+      return text(await listLibrary({ type, tag, q: query, minLiftPct }));
+    },
+  );
+
+  server.registerTool(
+    "get_library_item",
+    {
+      title: "Get a library item",
+      description: "One library item in full: the change operations of an element test, or the titles, excerpts and sizes of the page versions, plus the final statistics.",
+      inputSchema: { itemId: z.string().uuid() },
+      annotations: READ,
+    },
+    async ({ itemId }, extra) => {
+      const denied = requireScope(contextOf(extra.authInfo), "hub:read");
+      if (denied) return denied;
+      const item = await getLibraryItem(itemId);
+      return item ? text(describeLibraryItem(item)) : problem("library_item_not_found (404)");
     },
   );
 

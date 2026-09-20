@@ -93,6 +93,24 @@ class TCWAB_Finalizer {
 	}
 
 	/**
+	 * Library reuse: a change set that goes live at once as a permanent rule on one post, with no test.
+	 * Same storage and validation as an element-test winner.
+	 *
+	 * @param mixed $ops
+	 * @return array{ok:bool}|WP_Error
+	 */
+	public function apply_rule(string $rule_id, int $post_id, $ops) {
+		if ('' === $rule_id || !$post_id || !get_post($post_id)) {
+			return new WP_Error('tcwab_bad_request', 'ruleId and an existing postId are required.', ['status' => 400]);
+		}
+		if (!$this->store_permanent_rule($post_id, $rule_id, $ops)) {
+			return new WP_Error('tcwab_bad_request', 'No valid changes to apply.', ['status' => 400]);
+		}
+		$this->cache->purge_posts([$post_id]);
+		return ['ok' => true];
+	}
+
+	/**
 	 * Element tests: keep the winning change set as a permanent rule, served to everyone by the
 	 * inline runtime. The hub has already validated the ops; this only drops malformed entries.
 	 *

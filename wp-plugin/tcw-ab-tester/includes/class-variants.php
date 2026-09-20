@@ -30,6 +30,7 @@ class TCWAB_Variants {
 		'_tcwab_test_id',
 		'_tcwab_variant_key',
 		'_tcwab_variant_label',
+		'_tcwab_library_item',
 	];
 
 	/**
@@ -123,6 +124,56 @@ class TCWAB_Variants {
 			'title'     => get_the_title($post),
 			'permalink' => get_permalink($post),
 			'wordCount' => str_word_count(wp_strip_all_tags($post->post_content)),
+		];
+	}
+
+	/**
+	 * The content of a post, so a decided test can be reused on another site after its copy is deleted.
+	 *
+	 * @return array{id:int,type:string,title:string,content:string,excerpt:string}|WP_Error
+	 */
+	public function get_post_snapshot(int $post_id) {
+		$post = get_post($post_id);
+		if (!$post || !in_array($post->post_type, ['post', 'page'], true)) {
+			return new WP_Error('tcwab_post_not_found', 'Post not found.', ['status' => 404]);
+		}
+		return [
+			'id'      => $post->ID,
+			'type'    => $post->post_type,
+			'title'   => get_the_title($post),
+			'content' => (string) $post->post_content,
+			'excerpt' => (string) $post->post_excerpt,
+		];
+	}
+
+	/**
+	 * Creates a DRAFT post from a library snapshot. It is never published and never linked to a test:
+	 * the owner reviews it in wp-admin first. The hub is trusted (signed request), but the content still
+	 * goes through wp_insert_post, so WordPress's own filtering applies.
+	 *
+	 * @param array<string, mixed> $p
+	 * @return array{postId:int,editUrl:string,permalink:string}|WP_Error
+	 */
+	public function create_library_draft(array $p) {
+		$type = in_array($p['type'] ?? '', ['post', 'page'], true) ? (string) $p['type'] : 'page';
+		$id   = wp_insert_post(
+			wp_slash([
+				'post_type'    => $type,
+				'post_status'  => 'draft',
+				'post_title'   => sanitize_text_field((string) ($p['title'] ?? '')),
+				'post_content' => (string) ($p['content'] ?? ''),
+				'post_excerpt' => sanitize_textarea_field((string) ($p['excerpt'] ?? '')),
+			]),
+			true
+		);
+		if (is_wp_error($id)) {
+			return $id;
+		}
+		update_post_meta($id, '_tcwab_library_item', sanitize_text_field((string) ($p['libraryItemId'] ?? '')));
+		return [
+			'postId'    => (int) $id,
+			'editUrl'   => (string) get_edit_post_link($id, 'raw'),
+			'permalink' => (string) get_permalink($id),
 		];
 	}
 

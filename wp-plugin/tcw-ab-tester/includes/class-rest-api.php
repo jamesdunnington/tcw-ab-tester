@@ -30,6 +30,21 @@ class TCWAB_REST_API {
 				'callback'            => [$this, 'get_post_info'],
 				'permission_callback' => [$this, 'verify_signature'],
 			]);
+			register_rest_route('tcwab/v1', '/posts/(?P<id>\d+)/snapshot', [
+				'methods'             => 'GET',
+				'callback'            => [$this, 'get_post_snapshot'],
+				'permission_callback' => [$this, 'verify_signature'],
+			]);
+			register_rest_route('tcwab/v1', '/library/draft', [
+				'methods'             => 'POST',
+				'callback'            => [$this, 'create_library_draft'],
+				'permission_callback' => [$this, 'verify_signature'],
+			]);
+			register_rest_route('tcwab/v1', '/rules', [
+				'methods'             => 'POST',
+				'callback'            => [$this, 'store_rule'],
+				'permission_callback' => [$this, 'verify_signature'],
+			]);
 			register_rest_route('tcwab/v1', '/posts', [
 				'methods'             => 'GET',
 				'callback'            => [$this, 'search_posts'],
@@ -77,6 +92,35 @@ class TCWAB_REST_API {
 
 	public function get_post_info(WP_REST_Request $request) {
 		$result = $this->variants->get_post_info((int) $request->get_param('id'));
+		if (is_wp_error($result)) {
+			return $result;
+		}
+		return new WP_REST_Response($result, 200);
+	}
+
+	public function get_post_snapshot(WP_REST_Request $request) {
+		$result = $this->variants->get_post_snapshot((int) $request->get_param('id'));
+		if (is_wp_error($result)) {
+			return $result;
+		}
+		return new WP_REST_Response($result, 200);
+	}
+
+	public function create_library_draft(WP_REST_Request $request) {
+		$params = (array) $request->get_json_params();
+		if ('' === trim((string) ($params['title'] ?? '')) && '' === trim((string) ($params['content'] ?? ''))) {
+			return new WP_Error('tcwab_bad_request', 'A title or content is required.', ['status' => 400]);
+		}
+		$result = $this->variants->create_library_draft($params);
+		if (is_wp_error($result)) {
+			return $result;
+		}
+		return new WP_REST_Response($result, 201);
+	}
+
+	public function store_rule(WP_REST_Request $request) {
+		$params = (array) $request->get_json_params();
+		$result = $this->finalizer->apply_rule(sanitize_text_field((string) ($params['ruleId'] ?? '')), (int) ($params['postId'] ?? 0), $params['ops'] ?? null);
 		if (is_wp_error($result)) {
 			return $result;
 		}

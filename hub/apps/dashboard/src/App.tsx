@@ -1,9 +1,10 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, NavLink, Route, Routes } from "react-router-dom";
 import { useAuth } from "./context/AuthContext.js";
 import { LoginPage } from "./pages/Login.js";
 import { SitesPage } from "./pages/Sites.js";
 import { TestsPage } from "./pages/Tests.js";
 import { TestDetailPage } from "./pages/TestDetail.js";
+import { LibraryPage } from "./pages/Library.js";
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   const { user, loading } = useAuth();
@@ -21,6 +22,10 @@ export function App() {
       {user && (
         <header className="topbar">
           <span className="brand">TCW A/B Tester</span>
+          <nav aria-label="Main" className="small main-nav">
+            <NavLink to="/sites">Sites</NavLink>
+            <NavLink to="/library">Library</NavLink>
+          </nav>
           <nav aria-label="Account" className="small">
             <span className="muted">{user.email}</span>{" "}
             <button className="link-button" onClick={() => logout()}>Log out</button>
@@ -32,6 +37,7 @@ export function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/sites" element={<RequireAuth><SitesPage /></RequireAuth>} />
           <Route path="/sites/:siteId/tests" element={<RequireAuth><TestsPage /></RequireAuth>} />
+          <Route path="/library" element={<RequireAuth><LibraryPage /></RequireAuth>} />
           <Route path="/tests/:testId" element={<RequireAuth><TestDetailPage /></RequireAuth>} />
           <Route path="*" element={<Navigate to="/sites" replace />} />
         </Routes>

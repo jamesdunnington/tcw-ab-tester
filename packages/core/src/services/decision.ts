@@ -5,6 +5,7 @@ import { getDb } from "../context.js";
 import { buildRuntimeConfig } from "../config-builder.js";
 import { finalizeTest, pushRuntimeConfig, type FinalizeManifest } from "../wp-client.js";
 import { fail, ok, type ServiceResult } from "../result.js";
+import { recordLibraryItem, snapshotVariants } from "./library.js";
 
 const DECIDABLE = ["winner_found", "inconclusive"] as const;
 
@@ -55,6 +56,8 @@ export async function applyDecision(testId: string, input: DecisionInput, actor:
   if (claimed.length === 0) return fail(409, "test_not_decidable");
 
   try {
+    // 0. Copy the variants' content while they still exist: the library keeps it after the cleanup below.
+    const snapshots = test.type === "page" ? await snapshotVariants(site, test, variantRows) : {};
     // 1. Stop splitting BEFORE anything is deleted, or visitors could be sent to a deleted URL.
     await pushRuntimeConfig(site, await buildRuntimeConfig(site.id));
     // 2. Promote, then delete/retire. WordPress refuses to delete if promotion fails.
@@ -84,6 +87,11 @@ export async function applyDecision(testId: string, input: DecisionInput, actor:
       action: "test.decided",
       target: testId,
       meta: { chosen: chosen.key, recommended, deleteRedundant, errors: manifest.errors.length },
+    });
+    // Library: best effort. The decision is already final; a failure here must not undo it.
+    await recordLibraryItem({ test, site, variantRows, chosen, finalStats: latest?.result ?? null, snapshots }).catch((e) => {
+      // eslint-disable-next-line no-console
+      console.error("[core] could not record the library item:", e);
     });
     return ok({ manifest });
   } catch (err) {
