@@ -99,6 +99,20 @@ class TCWAB_Finalizer {
 	 * @param mixed $ops
 	 * @return array{ok:bool}|WP_Error
 	 */
+	/**
+	 * Restore an original after a winner replaced it, from the copy the hub kept.
+	 *
+	 * @param array<string, mixed> $snapshot
+	 * @return array{restored:true, revisionSaved:bool}|WP_Error
+	 */
+	public function restore_original(int $post_id, array $snapshot) {
+		$result = $this->promoter->restore_original($post_id, $snapshot);
+		if (!is_wp_error($result)) {
+			$this->cache->purge_posts([$post_id]);
+		}
+		return $result;
+	}
+
 	public function apply_rule(string $rule_id, int $post_id, $ops) {
 		if ('' === $rule_id || !$post_id || !get_post($post_id)) {
 			return new WP_Error('tcwab_bad_request', 'ruleId and an existing postId are required.', ['status' => 400]);

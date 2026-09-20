@@ -1,83 +1,102 @@
 # Handoff: state of the project and how to work in it
 
 Read this, then `docs/PLAN.md` (the design), then `README.md` (setup and the non-obvious design decisions).
-Repo: https://github.com/jamesdunnington/tcw-ab-tester (public, default branch **master**).
+Repo: https://github.com/jamesdunnington/tcw-ab-tester (public, default branch **master**). Working folder: `D:\Vibe Coding\TCW AB Tester`.
 
-**All five phases plus the Claude Desktop connector (`docs/MCP-PLAN.md`) are built, tested and pushed. CI is green (last code commit `f90184f`). 240 tests.**
-The dev stack (`dev/docker-compose.yml`) has now been built and started under real Docker (2026-09-20): all images build, migrations apply, every plugin file passes `php -l` on PHP 8.2. Nothing has yet been walked through in a real WordPress UI, and nothing has been deployed. Production hostnames: hub `https://test.thecontentwarrior.work`, MCP `https://mcptest.thecontentwarrior.work`. The hub is on a VPS and the WordPress sites are on other servers, so both must reach each other over public HTTPS.
+## Where things stand (2026-09-20)
 
-Work continuously without phase-boundary stops. This file is a manual input from the owner: only update it when asked.
+All five phases and the Claude Desktop connector (`docs/MCP-PLAN.md`) were built earlier and are on GitHub (last pushed commit `1f71dd5`). **Everything since is committed locally and NOT pushed** (the owner says a push to GitHub is a formal production copy: push only when asked, after local Docker CI passes). Nothing is deployed. Production hostnames for later: hub `https://test.thecontentwarrior.work`, MCP `https://mcptest.thecontentwarrior.work` (hub on a VPS, WordPress sites on other servers).
 
-## Next, in this order
+Local commits, oldest first: `ddb6aef` Docker fixes (.dockerignore, 64-char dev key) · `cf302a2` variant 404 + menu leak + Control/Challenger labels · `095ce7f` challenger tracking + Redis stream trim · `a3c0a58` Swiss dashboard restyle, dark toggle, new-tab links · `ef94fe8` logo + favicon · `f44e705` promote keeps the original as a revision · **plus uncommitted work in progress: "Restore original" (see below) and `dev/simulator/sim.mjs`**.
 
-1. **Shakedown in a real WordPress.** IN PROGRESS. Done: Docker installed (see quirks), stack built and running, first-run bugs fixed (root `.dockerignore`; dev `SECRET_ENCRYPTION_KEY` was 60 chars, needs 64). Still to do: the owner creates the hub admin (http://localhost:5174 First-time setup) and the WordPress install (http://localhost:8080) since the agent must not create accounts or type passwords; then walk the README steps for a page test AND an element test (editor, goal, winner, permanent rule), then the new things below. Known nuisance: MySQL's first start outlasts its 50s healthcheck, so the first `up` reports it unhealthy; wait for healthy and run `up -d` again (or raise `retries`/add `start_period`). Lint is clean but no PHP has executed a request yet, so expect plugin bugs. PHP added since the last shakedown plan:
-   - `class-editor-bridge.php`: heatmap mode (`?tcwab_heatmap=TOKEN`, token kinds), `class-hub-client.php` `verify_editor_token($token, $kind)`.
-   - `class-runtime.php`: consent is now only a server-side fallback plus a `strict` flag; `class-admin.php`: strict-mode checkbox.
-   - `class-variants.php`: `get_post_snapshot`, `create_library_draft`, `search_posts`; `class-finalizer.php`: `apply_rule`, `store_permanent_rule`; `class-rest-api.php`: routes `/posts/{id}/snapshot`, `/library/draft`, `/rules`.
-   - Also check: heat data arrives after real visits with a consent plugin active, and the heatmap overlay lines up on a real theme.
-2. **Deploy to the VPS**: DNS for `test.` and `mcptest.`, `hub/.env` (see `.env.example`: `MCP_DOMAIN`, optional `SMTP_URL`, `BACKUP_REMOTE` + `RCLONE_CONFIG_OFFSITE_*`). Then verify the connector in Claude Desktop (Settings > Connectors > Add custom connector > `https://mcptest.thecontentwarrior.work/mcp`). Only the SDK's own client has been tested, not Claude's. Watch: Claude's callback host (`ALLOWED_REDIRECT_HOSTS` in `oauth/provider.ts`), token refresh, tool approval prompts. Take one backup by hand and test a restore before trusting it.
-3. **Small known gaps:** no TOTP; a permanent rule cannot be removed from the UI (delete its entry in option `tcwab_permanent_rules`); the hub does not re-push permanent rules to a reconnected plugin; SEO-plugin index tables are not purged directly on cleanup; guardrail is click-rate only; raw events are pruned by a batched daily delete, not monthly partitions (deliberate); hover/permanent-rule/heatmap overlay have no automated browser test; the heatmap overlay always paints on the original DOM (for element variants the changed elements may not resolve); the library "permanent" path and draft-post path have only run against a fake WordPress.
+The first real-WordPress shakedown was done on a **page test** end to end. It found and fixed real bugs (list below). 240 unit tests passed locally after the label rename (`npm run ci:local`).
 
-## What exists
+## The shakedown, what is proven
 
-| Area | Where | State |
-|---|---|---|
-| Hub API (Fastify, Drizzle) | `hub/apps/api` | auth, sites (+ `/api/sites/:id/posts` title search), tests, variants, `/ingest`, signed WP routes, stats + decision, heatmap, library, editor endpoints |
-| Worker | `hub/apps/worker` | Redis Streams ingest -> `processEvent` (events, pageviews, `heat_bins`); BullMQ hourly stats + daily retention; winner email |
-| Dashboard (React/Vite) | `hub/apps/dashboard` | login, sites, tests, test detail (results, Heatmap panel, winner flow), Library page (browse, reuse), main nav. Design system: Data-Dense Dashboard, light/dark |
-| Claude connector | `hub/apps/mcp` | remote MCP + OAuth 2.1. Tools by scope. read: list_sites, list_tests, get_test, get_results, get_analytics, **get_heatmap, list_library, get_library_item**, find_posts, inspect_page. draft: create_element_test, create_page_test, set_variant_ops, get_editor_link, **apply_library_item**. live (needs confirm): start_test, stop_test, apply_winner, **apply_library_change_permanently** |
-| Shared logic | `packages/core` | services: tests, decision (winner flow, snapshots + library record), analytics, **heatmap** (`getHeatData`, `summarizeHeat`, `getHeatmap`), **library**, inspect. Apps hand it their db via `configureCore`; always use `getDb()` |
-| Shared types/crypto | `packages/shared` | schemas, HMAC, change-ops, editor token (kinds `editor` and `heatmap`), `HEAT_LAYERS/HEAT_GRID/SCROLL_BINS` |
-| DB | `packages/db` | Drizzle schema. Migrations in `hub/apps/api/drizzle` (0000-0004, all additive) |
-| Stats | `packages/stats` | Bayesian + frequentist, Engagement Score with the plan's 5 weights (sessions without section data are rescaled to the other 4), `decideWinner` gate |
-| Browser runtime | `packages/tracker` | `runtime-inline.ts` (1.62KB gz of 2KB), `tracker.ts` (2.6KB of 8KB), `consent.ts` (live consent: WP Consent API, Complianz, CookieYes) |
-| Visual editor | `packages/editor` | vanilla TS, Shadow DOM, `/editor.js` |
-| Heatmap overlay | `packages/heatmap` | vanilla TS, Shadow DOM, `/heatmap.js` (3.3KB gz). Imports `EditorApi` from `../../editor/src/api.js`; must NOT import values from `@tcw/shared` (its index pulls in `node:crypto`) |
-| WordPress plugin | `wp-plugin/tcw-ab-tester` | connect, duplicate, promote, cleanup, cache purge, archive, SEO guard, editor/heatmap bridge, snapshots, library drafts, rules |
-| Backups | `hub/backup` | alpine + pg_dump + rclone, cron via `BACKUP_CRON`; compose service `backup` |
-| Compose | `hub/docker-compose.yml` (prod), `dev/docker-compose.yml` (hub + WP) | validated by CI only |
+Proven in the running dev stack: connect plugin (signed heartbeat), create page test, duplicate page, start test (runtime config injected, split, redirect to challenger), tracking on both original and challenger, ingest -> Redis -> worker -> Postgres -> stats (challenger +78% found, gates held until 200 sessions and 7 days), heatmap click layer, winner flow (apply challenger + delete copy: original URL serves the challenger's content on the same post ID and slug, variant post and meta gone, archive row in WP and hub, library item recorded, runtime config emptied).
 
-## How things fit (Phase 4 and 5 facts worth knowing)
+**Not yet tested (needs the owner logged in to wp-admin at `http://host.docker.internal:8080/wp-admin`, the agent must not type passwords):** element test + visual editor, goal, permanent rule, heatmap overlay on a real theme, tracking from a real browser to the hub (the built-in browser pane blocks calls to port 4000; use the owner's Chrome, set `document.cookie='wp_consent_statistics=allow; path=/'` first because there is no consent tool), Claude Desktop connector, VPS deploy, backup + restore.
 
-- **Heat data flow:** tracker click/rage/hover events carry `sel` (from `buildSelector` in `packages/editor/src/selector.ts`), `ox`/`oy` (percent inside the element), clicks carry `dead`. `section_view` events come from an IntersectionObserver. Worker `heat.ts` `deriveHeatBins` maps each event to `heat_bins` rows (layers click, hover, scroll, attention, rage, dead; 10x10 cells; scroll in 5% bands). `pageviews` gained `sections_seen/sections_total`.
-- **Token kinds:** `verifyEditorToken(..., kind = "editor")` rejects heatmap tokens; `/editor/renew` uses `"any"`. The plugin does the same via the `k` claim.
-- **Consent** is never decided at render time (page caches would freeze it). `cfg.consent` is only the fallback; `cfg.strict` hides variants until consent.
-- **Library:** `applyDecision` snapshots variants (page tests) BEFORE finalize deletes anything, then calls `recordLibraryItem` (best effort, never undoes a decision). `library_items` keeps element ops (goals included), snapshots, final stats. Reuse: element/test = draft test + editor link; element/permanent = winners only; page = draft post.
-- **Email:** `notify.ts` claims `tests.winner_notified_at` atomically before sending and releases it if the send fails. No `SMTP_URL` = nothing claimed, nothing sent.
-- **Retention:** `retention.ts` batched deletes; pageviews, heat_bins, decisions, library are never deleted.
+## In progress: "Restore original" (the owner asked for this)
 
-## How to run the checks
+Requirement: after a winner replaces the original, the outcome must let the owner get the original back. The hub already keeps it: `library_items.snapshots.a` holds the original's `title`, `content`, `excerpt`, taken before anything is deleted.
 
-```bash
-npm ci
-npm run ci:local          # build every workspace + all tests (mirrors the Node CI job)
-npm run tracker:build     # rebuild browser bundles: copied to hub/apps/api/public (gitignored) and wp-plugin/.../assets (COMMITTED)
-```
+Done (plugin, tested with scratch scripts on real WordPress): `TCWAB_Promoter::restore_original()` (saves the current version as a revision first, refuses test copies and empty snapshots), `TCWAB_Finalizer::restore_original()` (adds cache purge), REST route `POST /wp-json/tcwab/v1/posts/{id}/restore` (signed) with body `{title, content, excerpt}`.
 
-CI also runs `php -l` over the plugin and `docker compose config` on both compose files, on every push. Counts: core 20, editor 37, heatmap 8, shared 25, stats 58, tracker 16, api 5, mcp 34, worker 37.
-Migrations: edit `packages/db/src/schema.ts`, then from `hub/apps/api` run `DATABASE_URL=postgres://x:x@localhost:5432/x npx drizzle-kit generate`. They run automatically when the API container starts. Keep them additive.
+To do, in order:
+1. `packages/core/src/wp-client.ts`: `restorePost(site, wpPostId, snapshot)` calling that route.
+2. `packages/core/src/services/decision.ts` (or a new file): `restoreOriginal(testId, actor)`. Allowed only for an archived **page** test whose chosen variant was not the control, when the library item has `snapshots.a`, and not already restored. Audit-log it. Export from the core index.
+3. Migration (additive): `decisions.restored_at timestamptz`. Edit `packages/db/src/schema.ts`, then in `hub/apps/api` run `DATABASE_URL=postgres://x:x@localhost:5432/x npx drizzle-kit generate`; rebuild `@tcw/db` and `@tcw/core` before testing dependents.
+4. API route `POST /api/tests/:id/restore-original` (see `hub/apps/api/src/routes/decisions.ts`), and expose outcome info on the test response: chosen key, decided date, `restorable`, `restoredAt`.
+5. Dashboard: an **Outcome** section on archived tests with "Restore the original", a confirm dialog (destructive-action pattern, see `ConfirmDialog.tsx`) saying WordPress saves the current version as a revision first, and a "restored on ..." state. Be honest in the UI: the snapshot covers title, content and excerpt only; template, featured image and SEO fields are not restored (extending the snapshot to meta/taxonomies is a follow-up).
+6. Element tests: "restoring" means removing the permanent rule. The plugin has no route for that yet (known gap: delete option `tcwab_permanent_rules` entry by hand). Add one and the same UI.
+7. Optionally an MCP tool (live scope, confirm) in `hub/apps/mcp/src/tools/`. Add tests (`hub/apps/mcp/src/__tests__/e2e.test.ts` uses PGlite + a fake WordPress).
 
-## Environment quirks (these cost real time)
+## Bugs found by running it for real (all fixed and committed)
 
-- **Docker Desktop is installed on D:** (`D:\Docker\app`; image and VM data in `D:\Docker\wsl`, set via `--wsl-default-data-root`). **C: is nearly full (~22GB): nothing may store there.** `docker.exe` is not on PATH: `$env:Path += ";D:\Docker\app\resources\bin"`, and set `COMPOSE_PROGRESS=plain` for readable build logs (`--progress` is not a valid flag here). There is still no host PHP: lint inside the container, `docker exec dev-wordpress-1 php -l <file>`.
-- **The Claude app is an MSIX package**, so its shell sees a redirected `AppData\Local`. Docker Desktop must be launched by the user, not by the agent; the recurring startup error "initializing Secrets Engine ... engine.sock ... cannot be accessed" comes from a stale `AppData\Local\docker-secrets-engine`, and earlier renames of it (`-old-*`) are all still there.
-- **Build context is the repo root**, so the root `.dockerignore` (node_modules, dist, generated `hub/apps/api/public`, `.env`) is essential: without it the host's Windows esbuild binary is copied into the Linux image and the build fails.
-- **Install everything inside the project** (user requirement): `npm install -w <workspace> <pkg>`; nothing global. Scratch scripts go in the session scratchpad, not `/tmp`.
-- **Stale `dist`:** other workspaces import `@tcw/shared`, `@tcw/db`, `@tcw/stats`, `@tcw/core` from their built `dist`. After changing one, rebuild it (`npm run build -w @tcw/<name>`) before testing dependents. The root build order is explicit for the same reason.
-- **Shell heredocs:** break past roughly 150 lines ("unexpected EOF"), and they MANGLE BACKSLASHES (`\n` became a real newline, `\d` became `d` in PHP). Use the Write/Edit tools for anything with escapes or regexes, or write a patch script file with Write and run it with node.
-- **GateGuard hook:** the first Write/Edit of each file per session is refused once and asks for importers, affected API, data shape and the verbatim instruction. State them briefly, then retry the identical call. Bash edits bypass it.
-- **CRLF:** git converts checked-out files to CRLF here. Patch scripts matching multi-line strings must normalise line endings first. `.gitattributes` forces LF for `*.sh` (Docker scripts).
-- Recursive forced deletes are blocked by a hook, and it also fires on any command whose text merely mentions one.
-- **Commit and push after each unit of work** (the project folder and repo were once deleted by accident). Then confirm CI: `gh run watch <id> --exit-status`. jsdom 25 is pinned at the root (CI is Node 20).
-- **Browser checks:** the built-in browser works. Run `npx vite preview --port 4173` in the dashboard (proxies `/api` to 4000), point a throwaway mock API at 4000 (and a fake WordPress page on 4174 for the overlays), then STOP them afterwards (PowerShell: kill listeners on those ports). Native `<select>` cannot be driven by the automation; set the value via JS and dispatch `change`.
+Missing root `.dockerignore` (host Windows node_modules broke the Linux image) · dev `SECRET_ENCRYPTION_KEY` 60 chars, needs 64 · the plugin's `pre_get_posts` filter made every variant page a 404 (now skips singular requests) · variants leaked into the Pages menu block and sitemaps (added `get_pages` and sitemap filters) · the tracker/config were only printed on the original post so challenger traffic was never recorded (`tests_for_post` now matches variants of the tested post) · the worker XACKed but never deleted ingest entries, so the Redis stream grew forever (now XDEL) · promote overwrote the original with no way back (WordPress does NOT keep the previous content; now saved as a revision first) · promote passed unslashed content to `wp_update_post`, corrupting backslashes (now `wp_slash`).
+
+## Bugs and gaps found, NOT fixed
+
+- Admin/editor exclusion from tests is in the plan (section 3) but not implemented anywhere.
+- Worker crash recovery: `reclaimStale` in `hub/apps/worker/src/consumer.ts` XAUTOCLAIMs entries but never processes or acks them.
+- The hub always calls `/wp-json/...`; a site on Plain permalinks fails. Plugin Test Connection should detect and warn.
+- One field does two jobs twice: the site `domain` is both where the hub calls WordPress AND the Origin `/ingest` accepts; the plugin's hub URL is both its server-to-server address and the browser's ingest URL (`class-runtime.php` uses `get_hub_url()`; `HUB_PUBLIC_URL` exists in the API env but is unused for this). Fine in production (same public URL), needs a single hostname in Docker (see below). README's "any domain label is fine for local testing" is wrong and must be corrected.
+- A control visitor who opens the challenger's URL directly is not sent back to the original; the old variant URL returns 404 after cleanup (no redirect).
+- MySQL's first start outlasts its 50s healthcheck, so the first `up` reports it unhealthy: wait for healthy and run `up -d` again, or add `start_period`/raise `retries`.
+- Worker throughput is about 25 events/s (sequential `handleEntry`); fine for the expected volume, note if bursts matter.
+- Older known gaps still stand: no TOTP; the hub does not re-push permanent rules to a reconnected plugin; SEO-plugin index tables are not purged directly on cleanup; guardrail is click-rate only; raw events are pruned by a batched daily delete, not partitions (deliberate); hover/permanent-rule/heatmap overlay have no automated browser test.
+
+## Dashboard design (done this session)
+
+Swiss/minimalist per the owner's choice: Schibsted Grotesk (`@fontsource-variable/schibsted-grotesk`) + Fira Code for code, ink on white with one vermilion accent, square corners, no shadows or boxed cards, heavy 2px section rules with `01/02/03` numbering, oversized tabular numerals. **Light is the default; Dark mode is an explicit header toggle** (`src/theme.ts`, `localStorage` key `tcw-theme`, guarded). Logo: `hub/apps/dashboard/public/logo.svg` (transparent, made from the owner's `D:\Affiliate Marketing\13. James Dunnington\Logo\TCW\content-warrior.svg` minus its background rect) in the header, `favicon.svg` (helmet on a light tile) as the icon; the logo is inverted with a CSS filter in dark mode. Possible follow-up the owner has not answered: match the ink/accent to the logo's navy and orange.
+
+Owner's standing rules for UI work: use the `frontend-design-pro` skill for the look and the `ui-ux-pro-max` skill for buttons and UX logic; verify at desktop and 375px, light and dark; 44px targets, visible focus, WCAG AA, no hover-only actions. **Every link from the hub to WordPress opens in a new tab** (`target="_blank" rel="noreferrer"`; editor/heatmap links go through `src/open-tab.ts`, which opens the tab inside the click and navigates it after the request, so pop-up blockers allow it and the hub tab is never taken over). Only the Sites, Tests and test-detail pages were checked visually after the restyle; Login and Library were not.
+
+## Environment (this Windows PC)
+
+- **Docker Desktop is installed on D:** (`D:\Docker\app`, data in `D:\Docker\wsl`). **C: is nearly full (~22GB free): nothing may store there.** `docker.exe` is not on PATH: `$env:Path += ";D:\Docker\app\resources\bin"`; set `COMPOSE_PROGRESS=plain` for readable logs (`--progress` is not a valid flag). No PHP on the host: lint/run PHP inside the container, `docker exec dev-wordpress-1 php -l <file>`; in Git Bash prefix `MSYS_NO_PATHCONV=1` or `/tmp/...` paths get mangled.
+- **Docker Desktop must be started by the owner**, not the agent (the Claude app is an MSIX package with a redirected `AppData`; its own launches see a different environment). A recurring startup error "initializing Secrets Engine ... engine.sock ... cannot be accessed" is a stale `AppData\Local\docker-secrets-engine`; rename that folder to a unique name (earlier `-old-*` renames are still there).
+- **The dev stack currently runs** (`docker compose -f dev/docker-compose.yml up -d --build`): dashboard http://localhost:5174, API :4000, WordPress **http://host.docker.internal:8080**. Dev-only data changes made to get a single hostname working: WordPress `siteurl`/`home` = `http://host.docker.internal:8080` (permalinks set to Post name), plugin option `tcwab_hub_url` = `http://host.docker.internal:4000`, hub `sites.domain` = `http://host.docker.internal:8080`. Postgres is reachable on host port 5433 (`docker exec dev-postgres-1 psql -U tcwab -d tcwab`). The owner has a hub admin (`cshnyt@gmail.com`) and a WordPress admin; **the agent must not create accounts or type passwords**. The finished test in the dev DB is an archived "Sample Page" page test. Scratch draft pages titled "SCRATCH ..." exist in that WordPress and can be deleted.
+- **Traffic simulator:** `dev/simulator/sim.mjs` posts synthetic visitors (consent true, correct Origin) to the real `/ingest`; run with `SITE_KEY=... TEST_ID=... N=120 node dev/simulator/sim.mjs` (rate limit 300 requests per 5 min per IP). The challenger has a built-in advantage. To reach the winner gates fast: backdate `tests.started_at` 8 days in Postgres and send about 200+ visitors per arm, then "Recompute now" in the dashboard.
+- **Install everything inside the project** (npm workspaces); nothing global. Scratch scripts go in the session scratchpad.
+- **Stale `dist`:** other workspaces import `@tcw/shared`, `@tcw/db`, `@tcw/stats`, `@tcw/core` from built `dist`; rebuild after changing one (`npm run build -w @tcw/<name>`). `npm run ci:local` builds everything and runs all tests (mirrors the Node CI job).
+- **Shell:** heredocs break past ~150 lines and mangle backslashes: use Write/Edit for anything with escapes. **GateGuard hook:** the first Write/Edit of each file per session is refused once and asks for importers, affected API, data shape and the verbatim instruction: state them briefly, then retry the identical call. Bash edits bypass it. Recursive forced deletes are blocked by a hook. Files check out with CRLF; normalise before multi-line patching.
+- **Browser checks:** the built-in browser pane works for the dashboard (resize with `resize_window`, reset to `desktop` afterwards). Native `<select>` cannot be driven; set the value via JS and dispatch `change`. The pane blocks page calls to `host.docker.internal:4000`.
 - `gh` is signed in as `jamesdunnington`.
-- **Hub SQL runs in tests** with PGlite (`@electric-sql/pglite`, dev dependency of `@tcw/mcp` and `@tcw/worker`) using the real migrations. Extend `hub/apps/mcp/src/__tests__/e2e.test.ts` (fake WordPress on loopback, real OAuth) or `hub/apps/worker/src/__tests__/jobs.test.ts` rather than mocking the db.
-- **MCP SDK 1.30 facts:** imports `zod/v4`; PKCE verified in our `service.exchangeCode`; an invalid access token must throw `InvalidTokenError` to get a 401; `registerTool` without an inputSchema calls the handler with `(extra)` only.
 
-## Conventions worth keeping
+## Owner's working rules (also in the agent's memory)
 
-- Commit messages explain the why; end with the Co-Authored-By line from the session.
-- UI work: use the `ui-ux-pro-max` skill; verify at desktop and 375px, light and dark.
-- Test statistics against textbook reference values, not against the implementation itself.
-- Site secrets are encrypted, not hashed. The browser only ever knows the public site key. See README "Why some things are built the way they are".
-- Ops are a closed, validated set (text, html, style, attr, hide, goal); no custom JS op.
+1. **CI runs locally in Docker for all projects** before anything is pushed; do not rely on GitHub Actions to be the first place things run.
+2. **A push to GitHub is a formal production copy**: push only when asked, only verified work. Commit locally as units finish.
+3. Commit messages explain the why and end with the Co-Authored-By line from the session.
+4. Test statistics against textbook reference values, not against the implementation.
+5. Site secrets are encrypted, not hashed; the browser only knows the public site key.
+6. Ops are a closed, validated set (text, html, style, attr, hide, goal); no custom JS op.
+7. Deployment order when the time comes: DNS for `test.` and `mcptest.`, `hub/.env` (see `.env.example`: `MCP_DOMAIN`, optional `SMTP_URL`, `BACKUP_REMOTE` + `RCLONE_CONFIG_OFFSITE_*`), then verify the connector in Claude Desktop (Settings > Connectors > Add custom connector > `https://mcptest.thecontentwarrior.work/mcp`; check `ALLOWED_REDIRECT_HOSTS` in `oauth/provider.ts`, token refresh, tool approval prompts), and take one backup by hand and test a restore before trusting it.
+
+## What exists (unchanged architecture)
+
+| Area | Where |
+|---|---|
+| Hub API (Fastify, Drizzle) | `hub/apps/api` |
+| Worker (Redis Streams ingest, BullMQ stats/retention, winner email) | `hub/apps/worker` |
+| Dashboard (React/Vite) | `hub/apps/dashboard` |
+| Claude connector (remote MCP + OAuth 2.1) | `hub/apps/mcp` |
+| Shared logic: tests, decision, analytics, heatmap, library, inspect | `packages/core` (apps hand it their db via `configureCore`; always use `getDb()`) |
+| Types, HMAC, change-ops, editor token | `packages/shared` |
+| Drizzle schema; migrations in `hub/apps/api/drizzle` (0000-0004, additive) | `packages/db` |
+| Bayesian + frequentist stats, Engagement Score, `decideWinner` gate | `packages/stats` |
+| Browser runtime (inline <2KB gz) + tracker + consent | `packages/tracker` (`npm run tracker:build` copies bundles to the API `public` and to the plugin `assets`, which is committed) |
+| Visual editor overlay / heatmap overlay | `packages/editor`, `packages/heatmap` (heatmap must not import values from `@tcw/shared`) |
+| WordPress plugin | `wp-plugin/tcw-ab-tester` (live-mounted into the dev WordPress, edits take effect at once) |
+| Backups | `hub/backup` |
+
+Facts worth knowing: heat data flows tracker -> `heat.ts` `deriveHeatBins` -> `heat_bins`; consent is never decided at render time (page caches), `cfg.consent` is only the fallback and without a consent tool nothing is tracked by design; token kinds `editor` and `heatmap`; `applyDecision` snapshots variants BEFORE finalize deletes anything and records the library item best-effort; winner email claims `tests.winner_notified_at` atomically; retention never deletes pageviews, heat_bins, decisions or library.
+
+## Suggested order for the next session
+
+1. Finish "Restore original" (steps above), test it in the running stack, commit.
+2. Owner logs in to wp-admin at the new hostname; walk the element test + editor + goal + winner + permanent rule.
+3. Fix the open bugs (admin exclusion and crash recovery first), then the README domain note, then update this file.
+4. Run `npm run ci:local` and the Docker build again, commit, and ask the owner before any push or deploy.

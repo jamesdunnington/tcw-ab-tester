@@ -41,12 +41,14 @@ class TCWAB_Promoter {
 		$original_kept  = (is_int($saved_revision) && $saved_revision > 0)
 			|| (!empty($latest) && $latest[0]->post_content === $source->post_content);
 
-		$updated = wp_update_post([
+		// wp_update_post() unslashes its input, so raw column values must be slashed first or any
+		// backslash in the content (escaped characters in block attributes) is silently stripped.
+		$updated = wp_update_post(wp_slash([
 			'ID'           => $source_id,
 			'post_title'   => $winner->post_title,
 			'post_content' => $winner->post_content,
 			'post_excerpt' => $winner->post_excerpt,
-		], true);
+		]), true);
 		if (is_wp_error($updated)) {
 			return $updated;
 		}
@@ -63,6 +65,45 @@ class TCWAB_Promoter {
 			'promoted'      => true,
 			'revisionSaved' => $original_kept,
 		];
+	}
+
+	/**
+	 * Puts the original's own words back (the hub kept them before the winner replaced them).
+	 * The current version is saved as a revision first, so a restore can itself be undone.
+	 * Covers title, content and excerpt; template, featured image and SEO fields are not in the snapshot.
+	 *
+	 * @param array<string, mixed> $snapshot
+	 * @return array{restored:true, revisionSaved:bool}|WP_Error
+	 */
+	public function restore_original(int $post_id, array $snapshot) {
+		$post = get_post($post_id);
+		if (!$post || !in_array($post->post_type, ['post', 'page'], true)) {
+			return new WP_Error('tcwab_post_missing', 'Post not found.', ['status' => 404]);
+		}
+		if ($this->variants->is_variant($post_id)) {
+			return new WP_Error('tcwab_is_variant', 'That post is a test copy, not an original.', ['status' => 409]);
+		}
+		if (!isset($snapshot['content']) || !is_string($snapshot['content']) || '' === trim($snapshot['content'])) {
+			return new WP_Error('tcwab_no_snapshot', 'There is no saved content to restore.', ['status' => 400]);
+		}
+
+		$saved_revision = wp_save_post_revision($post_id);
+		$latest         = array_values(wp_get_post_revisions($post_id));
+		$version_kept   = (is_int($saved_revision) && $saved_revision > 0)
+			|| (!empty($latest) && $latest[0]->post_content === $post->post_content);
+
+		$updated = wp_update_post(wp_slash([
+			'ID'           => $post_id,
+			'post_title'   => sanitize_text_field((string) ($snapshot['title'] ?? $post->post_title)),
+			'post_content' => $snapshot['content'],
+			'post_excerpt' => sanitize_textarea_field((string) ($snapshot['excerpt'] ?? '')),
+		]), true);
+		if (is_wp_error($updated)) {
+			return $updated;
+		}
+
+		// null from wp_save_post_revision() means an identical revision already exists, which also counts.
+		return ['restored' => true, 'revisionSaved' => $version_kept];
 	}
 
 	/** "Keep the redundant copy" path: hide it instead of deleting it. */

@@ -60,6 +60,11 @@ class TCWAB_REST_API {
 				'callback'            => [$this, 'store_config'],
 				'permission_callback' => [$this, 'verify_signature'],
 			]);
+			register_rest_route('tcwab/v1', '/posts/(?P<id>\d+)/restore', [
+				'methods'             => 'POST',
+				'callback'            => [$this, 'restore_original'],
+				'permission_callback' => [$this, 'verify_signature'],
+			]);
 			register_rest_route('tcwab/v1', '/finalize', [
 				'methods'             => 'POST',
 				'callback'            => [$this, 'finalize'],
@@ -167,6 +172,14 @@ class TCWAB_REST_API {
 		$this->cache->purge_posts($affected);
 
 		return new WP_REST_Response(['ok' => true, 'testCount' => count($tests)], 200);
+	}
+
+	public function restore_original(WP_REST_Request $request) {
+		$result = $this->finalizer->restore_original((int) $request->get_param('id'), (array) $request->get_json_params());
+		if (is_wp_error($result)) {
+			return $result;
+		}
+		return new WP_REST_Response($result, 200);
 	}
 
 	public function finalize(WP_REST_Request $request) {
