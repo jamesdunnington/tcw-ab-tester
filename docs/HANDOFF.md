@@ -43,9 +43,12 @@ Missing root `.dockerignore` (host Windows node_modules broke the Linux image) Â
 
 Logged-in users who can `edit_others_posts` (editors, admins) get no test config: no split, no tracking, always the original page; decided winners (permanent rules) still apply to them. `TCWAB_Runtime::is_excluded_visitor()` in `class-runtime.php`; the settings page has "Include logged-in editors and admins in tests" (option `tcwab_include_staff`) and there is a `tcwab_exclude_visitor` filter. **Consequence for walkthroughs: while the owner is logged in to wp-admin the front end always shows the original page; to see a live test, use a private window (logged out) or turn the setting on.** Safe under page caching because logged-in users normally bypass the cache. Checked on real WordPress with a scratch script (anonymous, admin, editor, subscriber, setting on); no PHP test suite exists in the repo.
 
+## Worker crash recovery (done)
+
+`hub/apps/worker/src/stream-recovery.ts`: every 30s (and at start) entries idle for 60s are claimed from ANY consumer (a restarted worker has a new name) and retried; a store failure (e.g. Postgres down) now leaves the entry pending instead of acking and losing it; a malformed entry is still dropped; after 5 deliveries an entry moves to the `tcw:ingest:events:dead` stream (fields `id`, `payload`, `reason`) for a human to look at. Nothing reads or alerts on the dead stream yet: check with `XLEN tcw:ingest:events:dead`. Unit tests use a fake Redis; the same code was also run against the real dev Redis on a throwaway stream (crash, retry, dead-letter).
+
 ## Bugs and gaps found, NOT fixed
 
-- Worker crash recovery: `reclaimStale` in `hub/apps/worker/src/consumer.ts` XAUTOCLAIMs entries but never processes or acks them.
 - The hub always calls `/wp-json/...`; a site on Plain permalinks fails. Plugin Test Connection should detect and warn.
 - One field does two jobs twice: the site `domain` is both where the hub calls WordPress AND the Origin `/ingest` accepts; the plugin's hub URL is both its server-to-server address and the browser's ingest URL (`class-runtime.php` uses `get_hub_url()`; `HUB_PUBLIC_URL` exists in the API env but is unused for this). Fine in production (same public URL), needs a single hostname in Docker (see below). README's "any domain label is fine for local testing" is wrong and must be corrected.
 - A control visitor who opens the challenger's URL directly is not sent back to the original; the old variant URL returns 404 after cleanup (no redirect).
@@ -104,5 +107,5 @@ Facts worth knowing: heat data flows tracker -> `heat.ts` `deriveHeatBins` -> `h
 
 1. Owner checks the Outcome panel in the dashboard (restore is already done on the dev "Sample Page" test, so it shows the restored state).
 2. Owner logs in to wp-admin at the new hostname; walk the element test + editor + goal + winner + permanent rule.
-3. Fix the open bugs (worker crash recovery first), then the README domain note, then update this file.
+3. Fix the open bugs (single-hostname domain issue, plain permalinks), then the README domain note, then update this file.
 4. Run `npm run ci:local` and the Docker build again, commit, and ask the owner before any push or deploy.
