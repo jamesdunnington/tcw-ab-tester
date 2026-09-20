@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { createPageTestSchema, createElementTestSchema, changeOpsSchema } from "@tcw/shared";
-import { addPageVariant, createElementTest, createPageTest, getOutcome, saveVariantOps, startTest, stopTest, type ServiceResult } from "@tcw/core";
+import { addPageVariant, createElementTest, createPageTest, deleteDraftTest, getOutcome, saveVariantOps, startTest, stopTest, type ServiceResult } from "@tcw/core";
 import { tests, variants } from "@tcw/db";
 import { db } from "../db/client.js";
 import { requireAuth } from "../lib/session.js";
@@ -62,5 +62,12 @@ export async function testRoutes(app: FastifyInstance): Promise<void> {
   app.post("/api/tests/:id/stop", async (request, reply) => {
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
     return send(reply, await stopTest(id));
+  });
+
+  // Throws away a test that never went live (and, for a page test, its WordPress copy). Refused for anything else.
+  app.post("/api/tests/:id/delete-draft", async (request, reply) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    const user = request.currentUser!;
+    return send(reply, await deleteDraftTest(id, { userId: user.id, label: user.email }));
   });
 }

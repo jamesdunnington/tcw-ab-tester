@@ -111,6 +111,8 @@ export interface FinalizePayload {
   sourcePostId: number;
   chosenKey: string;
   deleteRedundant: boolean;
+  /** A draft being thrown away: remove the copies but leave no "test ran" row in the WordPress archive. */
+  discard?: boolean;
   startedAt: string | null;
   /** Element tests: the winning change set (goals stripped), stored as a permanent rule with no tracking. */
   permanentOps?: ChangeOp[];

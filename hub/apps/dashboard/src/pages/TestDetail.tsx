@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../lib/api.js";
 import { openInNewTab } from "../open-tab.js";
 import type { StatsResponse, Test, TestOutcome, Variant } from "../lib/types.js";
+import { ConfirmDialog } from "../components/ConfirmDialog.js";
 import { DecisionPanel } from "../components/DecisionPanel.js";
 import { OutcomePanel } from "../components/OutcomePanel.js";
 import { HeatmapPanel } from "../components/HeatmapPanel.js";
@@ -22,6 +23,8 @@ export function TestDetailPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const navigate = useNavigate();
 
   // Resolves once the test and its stats are fresh, so an action can keep its buttons disabled until the page shows the new state.
   const load = useCallback((): Promise<unknown> => {
@@ -55,6 +58,21 @@ export function TestDetailPage() {
       await openInNewTab(async () => (await api.post<{ url: string }>(`/api/tests/${testId}/variants/${variantKey}/editor-link`)).url);
     } catch (err) {
       setError(err instanceof Error ? `Could not open the editor (${err.message}).` : "Could not open the editor.");
+    }
+  }
+
+  async function deleteDraft() {
+    if (!test) return;
+    setError(null);
+    setBusy(true);
+    try {
+      await api.post(`/api/tests/${testId}/delete-draft`);
+      navigate(`/sites/${test.siteId}/tests`);
+    } catch (err) {
+      setConfirmingDelete(false);
+      setError(err instanceof Error ? `Could not delete the draft (${err.message}). Nothing was deleted from your hub.` : "Could not delete the draft.");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -204,6 +222,28 @@ export function TestDetailPage() {
           <button className="btn" disabled={busy || (isElement && !hasEdits)} onClick={() => act("start", undefined, "The test is live.", "Could not start the test.")}><Icon name="play" />Start test</button>
         </p>
       )}
+
+      {test.status === "draft" && (
+        <p style={{ marginTop: 16 }}>
+          <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setConfirmingDelete(true)}>Delete draft</button>
+        </p>
+      )}
+      <ConfirmDialog
+        open={confirmingDelete}
+        title="Delete this draft?"
+        confirmLabel="Delete draft"
+        danger
+        busy={busy}
+        onConfirm={() => void deleteDraft()}
+        onCancel={() => setConfirmingDelete(false)}
+      >
+        <p>This test has not started, so no visitor has seen it.</p>
+        <ul>
+          <li>The test and its edits are removed from the hub.</li>
+          {!isElement && <li><strong>The challenger copy in WordPress is deleted.</strong> This cannot be undone.</li>}
+          <li>Your original page is not touched.</li>
+        </ul>
+      </ConfirmDialog>
 
       {stats && (isLive || test.status === "archived" || test.status === "inconclusive") && (
         <>

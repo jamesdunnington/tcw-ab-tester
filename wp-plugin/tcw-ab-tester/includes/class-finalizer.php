@@ -79,6 +79,10 @@ class TCWAB_Finalizer {
 
 		$this->cache->purge_posts($purge_ids);
 
+		if (!empty($p['discard'])) {
+			return $manifest; // a draft that never ran: no archive row
+		}
+
 		$this->archive->record_result([
 			'hub_test_id'       => sanitize_text_field((string) ($p['testId'] ?? '')),
 			'test_name'         => sanitize_text_field((string) ($p['testName'] ?? '')),

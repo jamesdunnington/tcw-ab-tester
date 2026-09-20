@@ -191,3 +191,54 @@ export async function restoreOriginal(testId: string, actor: Actor): Promise<Ser
     return fail(502, "restore_failed", err instanceof Error ? err.message : String(err));
   }
 }
+
+/**
+ * Deletes a test that never went live. A page test's WordPress copy is removed first, through the same
+ * signed finalize call ("keep the original, delete the copies"), and only if that succeeds are the hub rows
+ * dropped, so a failure never leaves a stray copy behind an already-deleted test. Nothing else is touched:
+ * a draft has no visitors, stats or decision.
+ */
+export async function deleteDraftTest(testId: string, actor: Actor): Promise<ServiceResult<{ deletedCopies: number }>> {
+  const db = getDb();
+  const [test] = await db.select().from(tests).where(eq(tests.id, testId)).limit(1);
+  if (!test) return fail(404, "test_not_found");
+  if (test.status !== "draft") return fail(409, "only_drafts_can_be_deleted", { status: test.status });
+
+  const variantRows = await db.select().from(variants).where(eq(variants.testId, testId));
+  const copies = variantRows.filter((v) => !v.isControl && v.wpPostId);
+  let deletedCopies = 0;
+
+  if (copies.length > 0) {
+    const [site] = await db.select().from(sites).where(eq(sites.id, test.siteId)).limit(1);
+    if (!site) return fail(404, "site_not_found");
+    const control = variantRows.find((v) => v.isControl);
+    if (!control) return fail(409, "test_has_no_control");
+    let manifest: FinalizeManifest;
+    try {
+      manifest = await finalizeTest(site, {
+        testId: test.id,
+        testName: test.name,
+        sourcePostId: test.wpPostId,
+        chosenKey: control.key,
+        deleteRedundant: true,
+        discard: true,
+        startedAt: null,
+        variants: variantRows.map((v) => ({ key: v.key, postId: v.wpPostId ?? null, isControl: v.isControl })),
+      });
+    } catch (e) {
+      return fail(502, "wordpress_unreachable", e instanceof Error ? e.message : String(e));
+    }
+    if (manifest.errors.length > 0) return fail(502, "copy_not_deleted", { errors: manifest.errors });
+    deletedCopies = manifest.deleted.length;
+  }
+
+  // Variants, assignments and other rows go with the test (ON DELETE CASCADE).
+  await db.delete(tests).where(and(eq(tests.id, testId), eq(tests.status, "draft")));
+  await db.insert(auditLog).values({
+    actor: actor.label,
+    action: "test.draft_deleted",
+    target: testId,
+    meta: { name: test.name, type: test.type, deletedCopies },
+  });
+  return ok({ deletedCopies });
+}
