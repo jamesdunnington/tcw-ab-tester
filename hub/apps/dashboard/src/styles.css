@@ -184,7 +184,7 @@ main { max-width: var(--measure); margin: 0 auto; padding: var(--space-6) var(--
 .kpi .sub { color: var(--text-muted); font-size: 0.875rem; }
 
 /* Tables: only horizontal rules. They scroll inside their own wrapper on small screens. */
-.table-wrap { overflow-x: auto; background: transparent; border: 0; border-top: 2px solid var(--rule); }
+.table-wrap { position: relative; overflow-x: auto; background: transparent; border: 0; border-top: 2px solid var(--rule); }
 .data-table { width: 100%; border-collapse: collapse; min-width: 560px; }
 .data-table caption { text-align: left; padding: var(--space-3) 0; font-weight: 700; }
 .data-table th, .data-table td { padding: var(--space-3) var(--space-4); border-top: 1px solid var(--border); text-align: left; font-size: 0.9375rem; vertical-align: top; }

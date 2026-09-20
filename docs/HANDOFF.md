@@ -39,7 +39,7 @@ Production hostnames for later: hub `https://test.thecontentwarrior.work`, MCP `
 - **Claude Desktop connector** end to end (needs public HTTPS, so only after deploy).
 - **VPS deploy**, and **backup + restore** (take one backup by hand and test a restore before trusting it).
 - The overlay's Close button and the hover / rage-click / dead-click layers were not exercised (the simulator sends no such events); no automated browser test exists for hover, permanent rules or the heatmap overlay.
-- Login and Library pages were not checked visually after the restyle (only Sites, Tests, test detail were), and the Outcome panel was not checked at 375px or in dark mode.
+- Login and Library pages were not checked visually after the restyle (only Sites, Tests, test detail were), (the Outcome panel was checked at 360px in light and dark: fits, 44px button; a page-level sideways scroll caused by an unclipped visually-hidden span in table cells was fixed with `position: relative` on `.table-wrap`).
 
 ## 4. Known gaps, in suggested order
 
@@ -55,9 +55,8 @@ Production hostnames for later: hub `https://test.thecontentwarrior.work`, MCP `
 
 ## 5. Suggested order for the next session
 
-1. Owner glance at the Outcome panel at 375px and in dark mode; fix anything odd.
-2. Run `npm run ci:local` and the Docker build once more, commit, then **ask the owner** before any push or deploy.
-3. Deployment, in this order: DNS for `test.` and `mcptest.`; `hub/.env` (see `hub/.env.example`: `HUB_DOMAIN`, `MCP_DOMAIN`, optional `SMTP_URL`, `BACKUP_REMOTE` + `RCLONE_CONFIG_OFFSITE_*`); bring the stack up; connect the WordPress plugins with Hub URL `https://<HUB_DOMAIN>`; verify the connector in Claude Desktop (Settings > Connectors > Add custom connector > `https://mcptest.thecontentwarrior.work/mcp`; check `ALLOWED_REDIRECT_HOSTS` in `hub/apps/mcp/src/oauth/provider.ts`, token refresh, tool approval prompts); one manual backup and a test restore.
+1. Run `npm run ci:local` and the Docker build once more, commit, then **ask the owner** before any push or deploy.
+2. Deployment, in this order: DNS for `test.` and `mcptest.`; `hub/.env` (see `hub/.env.example`: `HUB_DOMAIN`, `MCP_DOMAIN`, optional `SMTP_URL`, `BACKUP_REMOTE` + `RCLONE_CONFIG_OFFSITE_*`); bring the stack up; connect the WordPress plugins with Hub URL `https://<HUB_DOMAIN>`; verify the connector in Claude Desktop (Settings > Connectors > Add custom connector > `https://mcptest.thecontentwarrior.work/mcp`; check `ALLOWED_REDIRECT_HOSTS` in `hub/apps/mcp/src/oauth/provider.ts`, token refresh, tool approval prompts); one manual backup and a test restore.
 
 ## 6. Behaviour worth knowing (decisions made, do not undo by accident)
 
