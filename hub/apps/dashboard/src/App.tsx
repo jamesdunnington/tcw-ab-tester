@@ -30,7 +30,9 @@ export function App() {
       <a className="skip-link" href="#main">Skip to content</a>
       {user && (
         <header className="topbar">
-          <span className="brand">TCW A/B Tester</span>
+          <NavLink to="/sites" className="brand" aria-label="TCW A/B Tester, home">
+            <img src="/logo.svg" alt="Content Warrior" width="63" height="87" />
+          </NavLink>
           <nav aria-label="Main" className="small main-nav">
             <NavLink to="/sites">Sites</NavLink>
             <NavLink to="/library">Library</NavLink>

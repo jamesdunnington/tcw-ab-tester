@@ -118,10 +118,12 @@ code, .mono { font-family: var(--font-mono); font-size: 0.875em; }
 /* Header: wordmark with a single accent square, hairline nav, heavy rule underneath */
 .topbar {
   display: flex; justify-content: space-between; align-items: center; gap: var(--space-4); flex-wrap: wrap;
-  padding: var(--space-3) var(--space-6); background: var(--bg); border-bottom: 2px solid var(--rule);
+  padding: var(--space-2) var(--space-6); background: var(--bg); border-bottom: 2px solid var(--rule);
 }
-.brand { font-weight: 800; font-size: 1.125rem; letter-spacing: -0.03em; display: inline-flex; align-items: center; gap: 10px; }
-.brand::before { content: ""; width: 12px; height: 12px; background: var(--accent); flex: none; }
+.brand { display: inline-flex; align-items: center; line-height: 0; }
+.brand img { display: block; height: 68px; width: auto; }
+/* The logo is dark navy on transparent. On the dark theme flip its lightness, keep its hues (orange stays orange). */
+:root[data-theme="dark"] .brand img { filter: invert(1) hue-rotate(180deg); }
 main { max-width: var(--measure); margin: 0 auto; padding: var(--space-6) var(--space-6) 64px; animation: rise 260ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
 .back-link { display: inline-flex; align-items: center; gap: var(--space-1); min-height: 44px; margin-bottom: var(--space-2); }
@@ -250,6 +252,7 @@ dialog h2::before { content: none; }
 @media (max-width: 600px) {
   main { padding: var(--space-5) var(--space-4) var(--space-6); }
   .topbar { padding: var(--space-3) var(--space-4); }
+  .brand img { height: 52px; }
   h2 { margin-top: var(--space-6); }
   .account-email { display: none; }
 }
