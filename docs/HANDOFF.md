@@ -39,7 +39,7 @@ Production hostnames for later: hub `https://test.thecontentwarrior.work`, MCP `
 - **Claude Desktop connector** end to end (needs public HTTPS, so only after deploy).
 - **VPS deploy**, and **backup + restore** (take one backup by hand and test a restore before trusting it).
 - The overlay's Close button and the hover / rage-click / dead-click layers were not exercised (the simulator sends no such events); no automated browser test exists for hover, permanent rules or the heatmap overlay.
-- Login and Library pages were not checked visually after the restyle (only Sites, Tests, test detail were), (the Outcome panel was checked at 360px in light and dark: fits, 44px button; a page-level sideways scroll caused by an unclipped visually-hidden span in table cells was fixed with `position: relative` on `.table-wrap`).
+- The Login page was not checked visually after the restyle. Library was checked at 375px (no sideways scroll, no small targets). The Outcome panel was checked at 360px in light and dark: fits, 44px button; a page-level sideways scroll caused by an unclipped visually-hidden span in table cells was fixed with `position: relative` on `.table-wrap`.
 
 ## 4. Known gaps, in suggested order
 
