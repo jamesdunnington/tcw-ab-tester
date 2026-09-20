@@ -2,9 +2,9 @@
 /**
  * Applies a winning variant to the ORIGINAL post (docs/PLAN.md section 6):
  * the URL, comments and SEO history stay with the original; only its
- * content is replaced. wp_update_post() makes WordPress save a revision of
- * the previous content first, so "keep old copy" stays one click away in
- * the post's revision history.
+ * content is replaced. WordPress does not keep the previous content on its
+ * own, so promote() saves it as a revision first: "keep old copy" stays one
+ * click away in the post's revision history.
  */
 
 if (!defined('ABSPATH')) {
@@ -32,7 +32,14 @@ class TCWAB_Promoter {
 			return new WP_Error('tcwab_wrong_variant', 'The winning post is not a variant of this original.', ['status' => 409]);
 		}
 
-		$revisions_before = count(wp_get_post_revisions($source_id));
+		// WordPress does NOT keep the previous content when a post is updated: on a page that was never
+		// edited, wp_update_post() only records a revision of the NEW content, and the original would be
+		// lost. So save the original's current state as a revision first.
+		$saved_revision = wp_save_post_revision($source_id);
+		$latest         = array_values(wp_get_post_revisions($source_id));
+		// wp_save_post_revision() returns null when an identical revision already exists, which is also fine.
+		$original_kept  = (is_int($saved_revision) && $saved_revision > 0)
+			|| (!empty($latest) && $latest[0]->post_content === $source->post_content);
 
 		$updated = wp_update_post([
 			'ID'           => $source_id,
@@ -54,7 +61,7 @@ class TCWAB_Promoter {
 
 		return [
 			'promoted'      => true,
-			'revisionSaved' => count(wp_get_post_revisions($source_id)) > $revisions_before,
+			'revisionSaved' => $original_kept,
 		];
 	}
 
