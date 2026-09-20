@@ -24,8 +24,12 @@
             $result.text("Failed: " + (response.data && response.data.message ? response.data.message : "unknown error")).css("color", "red");
           }
         })
-        .fail(function () {
-          $result.text("Request failed.").css("color", "red");
+        .fail(function (xhr) {
+          // The server answers 4xx/5xx with {success:false,data:{message}}; show that message, not a bare "failed".
+          var msg = xhr && xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message;
+          $result
+            .text("Failed: " + (msg || "request error (HTTP " + (xhr ? xhr.status : "?") + ")"))
+            .css("color", "red");
         })
         .always(function () {
           $btn.prop("disabled", false);
