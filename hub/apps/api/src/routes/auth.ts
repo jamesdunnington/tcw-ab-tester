@@ -28,6 +28,12 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ user });
   });
 
+  // Lets the login page hide "First-time setup" once an admin exists. Reveals only that one boolean.
+  app.get("/api/auth/setup-open", async (_request, reply) => {
+    const [{ value }] = await db.select({ value: count() }).from(users);
+    return reply.send({ setupOpen: value === 0 });
+  });
+
   app.post("/api/auth/login", async (request, reply) => {
     const body = credentialsSchema.parse(request.body);
     const [user] = await db

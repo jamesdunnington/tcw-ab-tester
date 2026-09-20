@@ -1,10 +1,19 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useAuth } from "../context/AuthContext.js";
+import { api } from "../lib/api.js";
 import { Icon } from "../components/Icon.js";
 
 export function LoginPage() {
   const { login, bootstrap } = useAuth();
   const [mode, setMode] = useState<"login" | "bootstrap">("login");
+  // Private hub: offer first-time setup only while no admin exists. The server enforces this regardless.
+  const [setupOpen, setSetupOpen] = useState(false);
+  useEffect(() => {
+    api
+      .get<{ setupOpen: boolean }>("/api/auth/setup-open")
+      .then((res) => setSetupOpen(res.setupOpen))
+      .catch(() => setSetupOpen(false));
+  }, []);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -28,10 +37,12 @@ export function LoginPage() {
     <div className="auth-screen">
       <form className="card auth-card" onSubmit={onSubmit}>
         <h1>TCW A/B Tester</h1>
-        <div className="tab-switch" role="group" aria-label="Sign in or first-time setup">
-          <button type="button" aria-pressed={mode === "login"} onClick={() => setMode("login")}>Log in</button>
-          <button type="button" aria-pressed={mode === "bootstrap"} onClick={() => setMode("bootstrap")}>First-time setup</button>
-        </div>
+        {setupOpen && (
+          <div className="tab-switch" role="group" aria-label="Sign in or first-time setup">
+            <button type="button" aria-pressed={mode === "login"} onClick={() => setMode("login")}>Log in</button>
+            <button type="button" aria-pressed={mode === "bootstrap"} onClick={() => setMode("bootstrap")}>First-time setup</button>
+          </div>
+        )}
 
         <div className="field">
           <label htmlFor="email">Email</label>
