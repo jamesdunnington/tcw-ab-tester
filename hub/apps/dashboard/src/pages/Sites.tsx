@@ -2,11 +2,12 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api.js";
 import { Icon } from "../components/Icon.js";
-import type { Site, SiteCredentials } from "../lib/types.js";
+import type { OverviewResponse, Site, SiteCredentials } from "../lib/types.js";
 
 export function SitesPage() {
   const [sites, setSites] = useState<Site[]>([]);
   const [loading, setLoading] = useState(true);
+  const [counts, setCounts] = useState<Record<string, { live: number; decide: number }>>({});
   const [domain, setDomain] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -15,6 +16,8 @@ export function SitesPage() {
   function refresh() {
     setLoading(true);
     api.get<{ sites: Site[] }>("/api/sites").then((res) => setSites(res.sites)).finally(() => setLoading(false));
+    // The live/waiting counts are a bonus: the table still works without them.
+    api.get<OverviewResponse>("/api/overview").then((res) => setCounts(Object.fromEntries(res.sites.map((s) => [s.id, { live: s.live, decide: s.decide }])))).catch(() => setCounts({}));
   }
   useEffect(refresh, []);
 
@@ -71,12 +74,14 @@ export function SitesPage() {
         <div className="table-wrap">
           <table className="data-table">
             <caption className="visually-hidden">Connected sites</caption>
-            <thead><tr><th>Site</th><th>Domain</th><th>Plugin</th><th>Last seen</th><th><span className="visually-hidden">Actions</span></th></tr></thead>
+            <thead><tr><th>Site</th><th>Domain</th><th className="num">Live</th><th className="num">Waiting</th><th>Plugin</th><th>Last seen</th><th><span className="visually-hidden">Actions</span></th></tr></thead>
             <tbody>
               {sites.map((s) => (
                 <tr key={s.id}>
                   <td>{s.displayName}</td>
                   <td>{s.domain}</td>
+                  <td className="num">{counts[s.id]?.live ?? "–"}</td>
+                  <td className="num">{counts[s.id]?.decide ? <Link to={`/?site=${s.id}`}>{counts[s.id].decide}<span className="visually-hidden"> waiting on your decision for {s.displayName}</span></Link> : counts[s.id]?.decide ?? "–"}</td>
                   <td>{s.pluginVersion ?? "Not connected yet"}</td>
                   <td>{s.lastSeenAt ? new Date(s.lastSeenAt).toLocaleString() : "Never"}</td>
                   <td><Link to={`/sites/${s.id}/tests`}>Tests<span className="visually-hidden"> for {s.displayName}</span></Link></td>

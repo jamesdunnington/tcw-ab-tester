@@ -283,3 +283,34 @@ dialog h2::before { content: none; }
 .main-nav a:hover { color: var(--text); }
 .main-nav a[aria-current="page"] { color: var(--text); font-weight: 700; box-shadow: inset 0 -3px 0 var(--accent); }
 @media (max-width: 600px) { .main-nav { margin-left: 0; flex-basis: 100%; order: 3; } }
+
+/* Overview: one ruled row per test. Numbers are oversized and tabular; the button is the row's one main action. */
+.ov-kpis { row-gap: var(--space-4); }
+.ov-kpis .value .ov-of { color: var(--text-muted); font-weight: 500; font-size: 0.55em; letter-spacing: 0; }
+.ov-filter { max-width: 360px; margin: var(--space-5) 0 0; }
+.ov-count { color: var(--text-muted); font-weight: 500; }
+.ov-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+.ov-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) auto; gap: var(--space-4) var(--space-6); align-items: center; padding: var(--space-5) 0; border-bottom: 1px solid var(--border); }
+.ov-site { margin: 0 0 var(--space-1); font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; overflow-wrap: anywhere; }
+.ov-name { margin: 0 0 var(--space-2); font-size: 1.25rem; overflow-wrap: anywhere; }
+.ov-status { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; margin: 0 0 var(--space-2); }
+.ov-checks { display: flex; align-items: center; margin: 0; }
+.ov-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-4); margin: 0; }
+.ov-metric dt { color: var(--text-muted); font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; }
+.ov-metric dd { margin: 2px 0 0; font-size: 1.75rem; font-weight: 700; letter-spacing: -0.03em; line-height: 1.1; }
+.ov-sub { display: block; color: var(--text-muted); font-size: 0.8125rem; }
+.ov-actions { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-2); min-width: 190px; }
+.ov-actions .btn { text-decoration: none; }
+.ov-sitelink { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; }
+/* Not enough width for title, four numbers and the button side by side: the numbers take their own line. */
+@media (max-width: 1100px) {
+  .ov-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .ov-metrics { grid-column: 1 / -1; order: 3; }
+}
+@media (max-width: 900px) {
+  .ov-row { grid-template-columns: 1fr; }
+  .ov-metrics { grid-column: auto; order: 0; }
+  .ov-actions { flex-direction: row; align-items: center; flex-wrap: wrap; }
+  .ov-actions .btn { flex: 1 1 200px; }
+}
+@media (max-width: 600px) { .ov-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

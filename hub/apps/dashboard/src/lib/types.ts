@@ -179,6 +179,39 @@ export type LibraryApplyResult =
   | { kind: "permanent_rule"; ruleId: string }
   | { kind: "draft_post"; postId: number; editUrl: string; permalink: string };
 
+/** GET /api/overview (see getOverview in @tcw/core): tests that are live or waiting on a decision, across all sites. */
+export interface OverviewTest {
+  id: string;
+  name: string;
+  type: "page" | "element";
+  status: TestStatus;
+  group: "decide" | "live";
+  siteId: string;
+  siteName: string;
+  siteDomain: string;
+  startedAt: string | null;
+  endedAt: string | null;
+  daysRunning: number;
+  minRunDays: number;
+  sessions: number;
+  leader: { key: string; label: string; liftPct: number | null; pBest: number } | null;
+  gatesPassed: number;
+  gatesTotal: number;
+}
+
+export interface OverviewSite {
+  id: string;
+  displayName: string;
+  domain: string;
+  live: number;
+  decide: number;
+}
+
+export interface OverviewResponse {
+  tests: OverviewTest[];
+  sites: OverviewSite[];
+}
+
 export interface PostSummary {
   id: number;
   type: "post" | "page";

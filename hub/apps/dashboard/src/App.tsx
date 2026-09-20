@@ -3,6 +3,7 @@ import { Navigate, NavLink, Route, Routes } from "react-router-dom";
 import { applyTheme, readTheme, type Theme } from "./theme.js";
 import { useAuth } from "./context/AuthContext.js";
 import { LoginPage } from "./pages/Login.js";
+import { OverviewPage } from "./pages/Overview.js";
 import { SitesPage } from "./pages/Sites.js";
 import { TestsPage } from "./pages/Tests.js";
 import { TestDetailPage } from "./pages/TestDetail.js";
@@ -30,10 +31,11 @@ export function App() {
       <a className="skip-link" href="#main">Skip to content</a>
       {user && (
         <header className="topbar">
-          <NavLink to="/sites" className="brand" aria-label="TCW A/B Tester, home">
+          <NavLink to="/" end className="brand" aria-label="TCW A/B Tester, home">
             <img src="/logo.svg" alt="Content Warrior" width="63" height="87" />
           </NavLink>
           <nav aria-label="Main" className="small main-nav">
+            <NavLink to="/" end>Overview</NavLink>
             <NavLink to="/sites">Sites</NavLink>
             <NavLink to="/library">Library</NavLink>
           </nav>
@@ -48,12 +50,13 @@ export function App() {
       )}
       <main id="main" tabIndex={-1}>
         <Routes>
-          <Route path="/login" element={<LoginPage />} />
+          <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
+          <Route path="/" element={<RequireAuth><OverviewPage /></RequireAuth>} />
           <Route path="/sites" element={<RequireAuth><SitesPage /></RequireAuth>} />
           <Route path="/sites/:siteId/tests" element={<RequireAuth><TestsPage /></RequireAuth>} />
           <Route path="/library" element={<RequireAuth><LibraryPage /></RequireAuth>} />
           <Route path="/tests/:testId" element={<RequireAuth><TestDetailPage /></RequireAuth>} />
-          <Route path="*" element={<Navigate to="/sites" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
     </>
