@@ -53,6 +53,9 @@ export async function runConsumer(): Promise<void> {
       }
       if (ackIds.length > 0) {
         await redis.xack(INGEST_STREAM_KEY, INGEST_CONSUMER_GROUP, ...ackIds);
+        // XACK only marks an entry as handled; it stays in the stream. Delete it too, or the stream
+        // (and Redis memory) grows for ever.
+        await redis.xdel(INGEST_STREAM_KEY, ...ackIds);
       }
     }
   }

@@ -88,9 +88,18 @@ class TCWAB_Runtime {
 			return [];
 		}
 
+		// A page-test variant is its own post. It must carry the same config as the original: the runtime
+		// skips the redirect when it is already on the variant's URL, and the tracker needs the test and
+		// variant to attribute this visit. Without it, visitors sent to the variant are never recorded.
+		$source_id = tcwab()->variants->get_source_post_id($post_id);
+
 		$matching = [];
 		foreach ($config as $test) {
-			if (!is_array($test) || (int) ($test['wpPostId'] ?? 0) !== $post_id) {
+			if (!is_array($test)) {
+				continue;
+			}
+			$tested_post = (int) ($test['wpPostId'] ?? 0);
+			if ($tested_post !== $post_id && (null === $source_id || $tested_post !== $source_id)) {
 				continue;
 			}
 			if (!in_array($test['status'] ?? '', ['running', 'winner_found', 'inconclusive'], true)) { // still splitting until the owner decides
