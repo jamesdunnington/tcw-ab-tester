@@ -50,6 +50,14 @@ export function OutcomePanel({ testId, isElement, outcome, onDone }: Props) {
           <button type="button" className="btn btn-secondary" onClick={() => setConfirming(true)} disabled={busy}>{isElement ? "Remove the permanent change" : "Restore the original"}</button>
         </>
       )}
+      {outcome.restoredAt && (
+        <>
+          <button type="button" className="btn btn-secondary" disabled aria-describedby="restored-note">{isElement ? "Permanent change removed" : "Original restored"}</button>
+          <p id="restored-note" className="muted small">
+            Done on {new Date(outcome.restoredAt).toLocaleString()}. It can only be done once. To go back further, use the page's revisions in WordPress.
+          </p>
+        </>
+      )}
       {!outcome.restorable && !outcome.restoredAt && (
         <p className="muted small">There is nothing to restore: the original was kept, or the hub has no saved copy of it.</p>
       )}
