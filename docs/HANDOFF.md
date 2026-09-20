@@ -43,7 +43,7 @@ Production hostnames for later: hub `https://test.thecontentwarrior.work`, MCP `
 
 ## 4. Known gaps, in suggested order
 
-1. **Plain permalinks:** the hub always calls `/wp-json/...`, so a site on Plain permalinks fails. The plugin's Test Connection should detect this and warn. (Next item to do.)
+1. **Plain permalinks:** the hub always calls `/wp-json/...`, so a site on Plain permalinks fails. Test Connection now warns (amber note) when `permalink_structure` is empty; the hub still does not fall back to `?rest_route=`. Only `php -l` checked; the warning path was not exercised against a Plain-permalink site.
 2. **Split-horizon addresses:** the site `domain` in the hub is both where the hub calls WordPress and the Origin `/ingest` accepts, so a setup where they differ cannot work. Fine in production (one public name); in Docker use `host.docker.internal` everywhere (README explains). A future step is a per-site list of extra allowed origins.
 3. **Dead-letter stream has no alert:** check with `XLEN tcw:ingest:events:dead` in Redis.
 4. **Ads (AdSense + Mediavine Journey):** ask Mediavine support how a client-side redirect on a Journey page is treated; the hub measures engagement, not ad revenue (a challenger that changes page structure can change ad count and RPM).
@@ -55,10 +55,9 @@ Production hostnames for later: hub `https://test.thecontentwarrior.work`, MCP `
 
 ## 5. Suggested order for the next session
 
-1. Plain-permalink detection in Test Connection (gap 1), test it, commit.
-2. Owner glance at the Outcome panel at 375px and in dark mode; fix anything odd.
-3. Run `npm run ci:local` and the Docker build once more, commit, then **ask the owner** before any push or deploy.
-4. Deployment, in this order: DNS for `test.` and `mcptest.`; `hub/.env` (see `hub/.env.example`: `HUB_DOMAIN`, `MCP_DOMAIN`, optional `SMTP_URL`, `BACKUP_REMOTE` + `RCLONE_CONFIG_OFFSITE_*`); bring the stack up; connect the WordPress plugins with Hub URL `https://<HUB_DOMAIN>`; verify the connector in Claude Desktop (Settings > Connectors > Add custom connector > `https://mcptest.thecontentwarrior.work/mcp`; check `ALLOWED_REDIRECT_HOSTS` in `hub/apps/mcp/src/oauth/provider.ts`, token refresh, tool approval prompts); one manual backup and a test restore.
+1. Owner glance at the Outcome panel at 375px and in dark mode; fix anything odd.
+2. Run `npm run ci:local` and the Docker build once more, commit, then **ask the owner** before any push or deploy.
+3. Deployment, in this order: DNS for `test.` and `mcptest.`; `hub/.env` (see `hub/.env.example`: `HUB_DOMAIN`, `MCP_DOMAIN`, optional `SMTP_URL`, `BACKUP_REMOTE` + `RCLONE_CONFIG_OFFSITE_*`); bring the stack up; connect the WordPress plugins with Hub URL `https://<HUB_DOMAIN>`; verify the connector in Claude Desktop (Settings > Connectors > Add custom connector > `https://mcptest.thecontentwarrior.work/mcp`; check `ALLOWED_REDIRECT_HOSTS` in `hub/apps/mcp/src/oauth/provider.ts`, token refresh, tool approval prompts); one manual backup and a test restore.
 
 ## 6. Behaviour worth knowing (decisions made, do not undo by accident)
 

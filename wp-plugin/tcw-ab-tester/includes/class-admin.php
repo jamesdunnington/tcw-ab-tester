@@ -181,6 +181,11 @@ class TCWAB_Admin {
 			wp_send_json_error(['message' => $result->get_error_message()], 502);
 		}
 
+		// The hub calls /wp-json/..., which only resolves with pretty permalinks.
+		if ('' === (string) get_option('permalink_structure')) {
+			$result['warning'] = __('Permalinks are set to "Plain", so the hub cannot reach this site\'s /wp-json/ endpoints. Change them under Settings > Permalinks (any option except Plain).', 'tcw-ab-tester');
+		}
+
 		wp_send_json_success($result);
 	}
 }

@@ -14,7 +14,12 @@
       })
         .done(function (response) {
           if (response && response.success) {
-            $result.text("Connected: " + (response.data.displayName || "OK")).css("color", "green");
+            var text = "Connected: " + (response.data.displayName || "OK");
+            if (response.data.warning) {
+              $result.text(text + ". Warning: " + response.data.warning).css("color", "#b45309");
+            } else {
+              $result.text(text).css("color", "green");
+            }
           } else {
             $result.text("Failed: " + (response.data && response.data.message ? response.data.message : "unknown error")).css("color", "red");
           }
