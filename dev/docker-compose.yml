@@ -46,7 +46,7 @@ services:
       DATABASE_URL: postgres://tcwab:dev-only-password@postgres:5432/tcwab
       REDIS_URL: redis://redis:6379
       SESSION_SECRET: dev-session-secret-change-me-please-32chars
-      SECRET_ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000aa
+      SECRET_ENCRYPTION_KEY: 000000000000000000000000000000000000000000000000000000000000aaaa
       ALLOWED_ORIGINS: http://localhost:5174
       HUB_PUBLIC_URL: http://localhost:4000
     ports:

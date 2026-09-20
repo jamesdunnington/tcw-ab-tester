@@ -4,13 +4,13 @@ Read this, then `docs/PLAN.md` (the design), then `README.md` (setup and the non
 Repo: https://github.com/jamesdunnington/tcw-ab-tester (public, default branch **master**).
 
 **All five phases plus the Claude Desktop connector (`docs/MCP-PLAN.md`) are built, tested and pushed. CI is green (last code commit `f90184f`). 240 tests.**
-Nothing has ever run in a real WordPress, been built as a Docker image, or been deployed. Production hostnames: hub `https://test.thecontentwarrior.work`, MCP `https://mcptest.thecontentwarrior.work`. The hub is on a VPS and the WordPress sites are on other servers, so both must reach each other over public HTTPS.
+The dev stack (`dev/docker-compose.yml`) has now been built and started under real Docker (2026-09-20): all images build, migrations apply, every plugin file passes `php -l` on PHP 8.2. Nothing has yet been walked through in a real WordPress UI, and nothing has been deployed. Production hostnames: hub `https://test.thecontentwarrior.work`, MCP `https://mcptest.thecontentwarrior.work`. The hub is on a VPS and the WordPress sites are on other servers, so both must reach each other over public HTTPS.
 
 Work continuously without phase-boundary stops. This file is a manual input from the owner: only update it when asked.
 
 ## Next, in this order
 
-1. **Shakedown in a real WordPress.** `docker compose -f dev/docker-compose.yml up --build`, then walk the README steps for a page test AND an element test (editor, goal, winner, permanent rule), then the new things below. No PHP has ever executed, so expect plugin bugs. PHP added since the last shakedown plan:
+1. **Shakedown in a real WordPress.** IN PROGRESS. Done: Docker installed (see quirks), stack built and running, first-run bugs fixed (root `.dockerignore`; dev `SECRET_ENCRYPTION_KEY` was 60 chars, needs 64). Still to do: the owner creates the hub admin (http://localhost:5174 First-time setup) and the WordPress install (http://localhost:8080) since the agent must not create accounts or type passwords; then walk the README steps for a page test AND an element test (editor, goal, winner, permanent rule), then the new things below. Known nuisance: MySQL's first start outlasts its 50s healthcheck, so the first `up` reports it unhealthy; wait for healthy and run `up -d` again (or raise `retries`/add `start_period`). Lint is clean but no PHP has executed a request yet, so expect plugin bugs. PHP added since the last shakedown plan:
    - `class-editor-bridge.php`: heatmap mode (`?tcwab_heatmap=TOKEN`, token kinds), `class-hub-client.php` `verify_editor_token($token, $kind)`.
    - `class-runtime.php`: consent is now only a server-side fallback plus a `strict` flag; `class-admin.php`: strict-mode checkbox.
    - `class-variants.php`: `get_post_snapshot`, `create_library_draft`, `search_posts`; `class-finalizer.php`: `apply_rule`, `store_permanent_rule`; `class-rest-api.php`: routes `/posts/{id}/snapshot`, `/library/draft`, `/rules`.
@@ -59,7 +59,9 @@ Migrations: edit `packages/db/src/schema.ts`, then from `hub/apps/api` run `DATA
 
 ## Environment quirks (these cost real time)
 
-- **No PHP, no Docker locally.** PHP is only syntax-checked in CI. Never run `docker`; CI validates compose.
+- **Docker Desktop is installed on D:** (`D:\Docker\app`; image and VM data in `D:\Docker\wsl`, set via `--wsl-default-data-root`). **C: is nearly full (~22GB): nothing may store there.** `docker.exe` is not on PATH: `$env:Path += ";D:\Docker\app\resources\bin"`, and set `COMPOSE_PROGRESS=plain` for readable build logs (`--progress` is not a valid flag here). There is still no host PHP: lint inside the container, `docker exec dev-wordpress-1 php -l <file>`.
+- **The Claude app is an MSIX package**, so its shell sees a redirected `AppData\Local`. Docker Desktop must be launched by the user, not by the agent; the recurring startup error "initializing Secrets Engine ... engine.sock ... cannot be accessed" comes from a stale `AppData\Local\docker-secrets-engine`, and earlier renames of it (`-old-*`) are all still there.
+- **Build context is the repo root**, so the root `.dockerignore` (node_modules, dist, generated `hub/apps/api/public`, `.env`) is essential: without it the host's Windows esbuild binary is copied into the Linux image and the build fails.
 - **Install everything inside the project** (user requirement): `npm install -w <workspace> <pkg>`; nothing global. Scratch scripts go in the session scratchpad, not `/tmp`.
 - **Stale `dist`:** other workspaces import `@tcw/shared`, `@tcw/db`, `@tcw/stats`, `@tcw/core` from their built `dist`. After changing one, rebuild it (`npm run build -w @tcw/<name>`) before testing dependents. The root build order is explicit for the same reason.
 - **Shell heredocs:** break past roughly 150 lines ("unexpected EOF"), and they MANGLE BACKSLASHES (`\n` became a real newline, `\d` became `d` in PHP). Use the Write/Edit tools for anything with escapes or regexes, or write a patch script file with Write and run it with node.

@@ -1,0 +1,9 @@
+# Build context is the repo root for every hub image. Host-built artifacts must
+# never enter it: node_modules carries the host OS's native binaries (esbuild,
+# rollup), which break the Linux image, and dist/public are rebuilt in-image.
+**/node_modules
+**/dist
+.git
+hub/apps/api/public
+hub/.env
+**/.env
